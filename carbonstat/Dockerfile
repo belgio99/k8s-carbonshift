@@ -4,9 +4,10 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-RUN apk add --no-cache gcc musl-dev python3-dev && \
+RUN apk add --no-cache gcc g++ musl-dev python3-dev && \
    pip3 install -r requirements.txt && \
-   apk del gcc musl-dev python3-dev
+   apk del gcc g++ musl-dev python3-dev
+
 
 COPY carbon-aware-service.py .
 ADD flavours flavours
