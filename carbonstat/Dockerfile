@@ -1,16 +1,15 @@
-FROM python:3-slim
+FROM python:3-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Install needed Python modules
 COPY requirements.txt .
-RUN pip3 install -r requirements.txt
 
-# Copy service's sources
+RUN apk add --no-cache gcc musl-dev python3-dev && \
+   pip3 install -r requirements.txt && \
+   apk del gcc musl-dev python3-dev
+
 COPY carbon-aware-service.py .
 ADD flavours flavours
 
-# Expose and run service
 EXPOSE 50000
 CMD python3 carbon-aware-service.py
