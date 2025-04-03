@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  detect-changes:
+  detect-changed-services:
     runs-on: ubuntu-22.04
     outputs:
       changed-services: ${{ env.changed }}
@@ -36,20 +36,12 @@ jobs:
               fi
             done
           fi
-          echo "Changed services: $changed_services"
+          echo "Changed services (containers to be rebuilt): $changed_services"
           echo "changed=$changed_services" >> $GITHUB_ENV
 
-  print-changed-containers:
-    needs: detect-changes
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Print changed containers
-        run: |
-          echo "Containers to be rebuilt: ${{ needs.detect-changes.outputs.changed-services }}"
-
   build-carbonstat:
-    needs: detect-changes
-    if: contains(needs.detect-changes.outputs.changed-services, 'carbonstat')
+    needs: detect-changed-services
+    if: contains(needs.detect-changed-services.outputs.changed-services, 'carbonstat')
     concurrency:
       group: build-carbonstat
       cancel-in-progress: false
