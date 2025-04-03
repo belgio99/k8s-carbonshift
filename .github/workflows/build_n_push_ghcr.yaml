@@ -78,8 +78,8 @@ jobs:
           context: ./carbonstat
           file: ./carbonstat/Dockerfile
           tags: |
-            ghcr.io/belgio99/k8s-carbonaware-scheduler/carbonstat:latest
-            ghcr.io/belgio99/k8s-carbonaware-scheduler/carbonstat:${{ steps.vars.outputs.sha_short }}
+            ghcr.io/belgio99/k8s-carbonshift/carbonstat:latest
+            ghcr.io/belgio99/k8s-carbonshift/carbonstat:${{ steps.vars.outputs.sha_short }}
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
