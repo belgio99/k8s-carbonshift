@@ -21,11 +21,12 @@ jobs:
         with:
           files: |
             carbonstat/**
+            buffer-service/**
 
       - name: Parse changed services
         id: parse-changes
         run: |
-          services="carbonstat"
+          services="carbonstat buffer-service"
           changed_services=""
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             changed_services="$services"
@@ -39,13 +40,20 @@ jobs:
           echo "Changed services (containers to be rebuilt): $changed_services"
           echo "changed=$changed_services" >> $GITHUB_ENV
 
-  build-carbonstat:
+  build-containers:
     needs: detect-changed-services
-    if: contains(needs.detect-changed-services.outputs.changed-services, 'carbonstat')
-    concurrency:
-      group: build-carbonstat
+    if: needs.detect-changed-services.outputs.changed-services != ''
+    runs-on: ubuntu-latest
+    concurrency: 
+      group: build-containers-${{ matrix.service }}
       cancel-in-progress: false
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        service: [
+          carbonstat,
+          buffer-service
+        ]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -64,14 +72,15 @@ jobs:
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Build and push container
+      - name: Build and push Docker image
+        if: contains(needs.detect-changes.outputs.changed-services, matrix.service)
         uses: docker/build-push-action@v3
         with:
-          context: ./carbonstat
-          file: ./carbonstat/Dockerfile
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
           tags: |
-            ghcr.io/belgio99/k8s-carbonshift/carbonstat:latest
-            ghcr.io/belgio99/k8s-carbonshift/carbonstat:${{ steps.vars.outputs.sha_short }}
+            ghcr.io/${{ github.repository_owner }}/k8s-carbonshift/${{ matrix.service }}:latest
+            ghcr.io/${{ github.repository_owner }}/k8s-carbonshift/${{ matrix.service }}:${{ steps.vars.outputs.sha_short }}
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
