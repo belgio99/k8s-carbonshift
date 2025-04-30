@@ -1,0 +1,9 @@
+apiVersion: scheduling.carbonshift.io/v1alpha1
+kind: TrafficSchedule
+metadata:
+  labels:
+    app.kubernetes.io/name: operator
+    app.kubernetes.io/managed-by: kustomize
+  name: trafficschedule-sample
+spec:
+  # TODO(user): Add fields here

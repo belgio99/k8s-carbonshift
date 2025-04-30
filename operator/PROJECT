@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: operator
 repo: github.com/belgio/k8s-carbonaware-scheduler/operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: carbonshift.io
+  group: scheduling
+  kind: TrafficSchedule
+  path: github.com/belgio/k8s-carbonaware-scheduler/operator/api/v1alpha1
+  version: v1alpha1
 version: "3"
