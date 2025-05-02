@@ -9,7 +9,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/belgio99/k8s-carbonshift/decision-engine
   # This sets the pull policy for images.
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
 
