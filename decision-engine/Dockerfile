@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY buffer-service.py .
+COPY decision-engine.py .
 
 EXPOSE 5001
 
