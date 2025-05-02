@@ -23,13 +23,13 @@ version: 0.1.0
 # It is recommended to use it with quotes.
 appVersion: "1.16.0"
 dependencies:
-  - name: istio-base
+  - name: base # Changed from istio-base
     version: 1.25.0
     repository: https://istio-release.storage.googleapis.com/charts
   - name: istiod
     version: 1.25.0
     repository: https://istio-release.storage.googleapis.com/charts
-  - name: istio-ingressgateway
+  - name: gateway # Changed from istio-ingressgateway
     version: 1.25.0
     repository: https://istio-release.storage.googleapis.com/charts
 

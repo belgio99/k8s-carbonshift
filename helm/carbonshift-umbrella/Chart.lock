@@ -1,0 +1,24 @@
+dependencies:
+- name: base
+  repository: https://istio-release.storage.googleapis.com/charts
+  version: 1.25.0
+- name: istiod
+  repository: https://istio-release.storage.googleapis.com/charts
+  version: 1.25.0
+- name: gateway
+  repository: https://istio-release.storage.googleapis.com/charts
+  version: 1.25.0
+- name: rabbitmq
+  repository: https://charts.bitnami.com/bitnami
+  version: 16.0.1
+- name: decision-engine
+  repository: file://../decision-engine
+  version: 0.1.0
+- name: buffer-service
+  repository: file://../buffer-service
+  version: 0.1.0
+- name: carbonshift-operator
+  repository: file://../carbonshift-operator
+  version: 0.1.0
+digest: sha256:25ca9a4e6e04d0c0a76c6c7fc2da408e35e31a9dab305b33d81f3e57fc418784
+generated: "2025-05-02T10:25:49.335418+02:00"
