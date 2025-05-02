@@ -22,11 +22,12 @@ jobs:
           files: |
             carbonstat/**
             buffer-service/**
+            decision-engine/**
 
       - name: Parse changed services
         id: parse-changes
         run: |
-          services="carbonstat buffer-service"
+          services="carbonstat buffer-service decision-engine"
           changed_services=""
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             changed_services="$services"
@@ -51,7 +52,8 @@ jobs:
       matrix:
         service: [
           carbonstat,
-          buffer-service
+          buffer-service,
+          decision-engine
         ]
 
     steps:
@@ -73,7 +75,7 @@ jobs:
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        if: contains(needs.detect-changes.outputs.changed-services, matrix.service)
+        if: contains(needs.detect-changed-services.outputs.changed-services, matrix.service)
         uses: docker/build-push-action@v3
         with:
           context: ./${{ matrix.service }}

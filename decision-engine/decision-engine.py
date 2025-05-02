@@ -3,9 +3,9 @@ import datetime
 
 app = Flask(__name__)
 
-@app.route('/')
+@app.route('/schedule')
 def get_decision():
-    # Calculate the valid until time
+    # Calculate the valid until time as the current time plus 1 hour
     valid_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
     valid_until_iso = valid_until.strftime('%Y-%m-%dT%H:%M:%SZ')
 
