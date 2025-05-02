@@ -11,3 +11,34 @@ rabbitmq:
     requests:
       cpu: 100m
       memory: 256Mi
+
+# Istio component configuration
+base:
+  # Assuming 'base' chart doesn't install namespaced resources directly or respects Release.Namespace
+  # No specific namespace override needed here typically, but monitor if errors persist.
+  {}
+
+global:
+  istioNamespace: carbonshift-system
+  proxy:
+    autoInject: disabled
+
+istiod:
+  namespace: carbonshift-system
+  sidecarInjectorWebhook:
+    enableNamespacesByDefault: false
+
+gateway:
+  namespace: carbonshift-system
+
+# Add other sub-chart overrides below if needed
+# Disable sidecar injection for non-gateway pods
+decision-engine:
+  podAnnotations:
+    sidecar.istio.io/inject: "false"
+buffer-service:
+  podAnnotations:
+    sidecar.istio.io/inject: "true"
+carbonshift-operator:
+  podAnnotations:
+    sidecar.istio.io/inject: "false"
