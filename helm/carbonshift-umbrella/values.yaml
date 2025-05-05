@@ -20,6 +20,8 @@ base:
 
 global:
   istioNamespace: carbonshift-system
+  hub: docker.io/istio
+  tag: 1.25.0
   proxy:
     autoInject: disabled
 
@@ -29,8 +31,8 @@ istiod:
     enableNamespacesByDefault: false
 
 gateway:
+  name: gateway
   namespace: carbonshift-system
-
 # Add other sub-chart overrides below if needed
 # Disable sidecar injection for non-gateway pods
 decision-engine:

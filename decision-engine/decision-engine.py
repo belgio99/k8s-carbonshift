@@ -26,7 +26,7 @@ def get_decision():
     }
     return jsonify(decision)
 
-@app.route('/readyz', methods=['GET'])
+@app.route('/healthz', methods=['GET'])
 def readiness_check():
     return jsonify({"status": "ready"}), 200
 

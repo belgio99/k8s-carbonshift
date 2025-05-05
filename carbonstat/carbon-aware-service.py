@@ -56,7 +56,7 @@ def avg():
     return jsonify({"avg": total, "elapsed": elapsed, "strategy": strategy.nop()})
 
 
-@app.route('/readyz', methods=['GET'])
+@app.route('/healthz', methods=['GET'])
 def readiness_check():
     return jsonify({"status": "ready"}), 200
 

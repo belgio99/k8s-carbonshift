@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  name: istio-proxy-restarter
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  name: istio-proxy-restarter
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete", "get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  name: istio-proxy-restarter
+subjects:
+  - kind: ServiceAccount
+    name: istio-proxy-restarter
+roleRef:
+  kind: Role
+  name: istio-proxy-restarter
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  name: restart-istio-proxy
+spec:
+  template:
+    spec:
+      serviceAccountName: istio-proxy-restarter
+      containers:
+        - name: kill-pod
+          image: bitnami/kubectl:latest
+          command:
+            - kubectl
+          args:
+            - delete
+            - pod
+            - -l app={{ .Values.gateway.name }}
+      initContainers:
+        - name: wait-for-istio
+          image: bitnami/kubectl:latest
+          command: ["sh", "-c", "kubectl wait pods -l app=istiod --for condition=Ready"]
+      restartPolicy: OnFailure

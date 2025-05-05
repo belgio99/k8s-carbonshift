@@ -21,4 +21,4 @@ dependencies:
   repository: file://../carbonshift-operator
   version: 0.1.0
 digest: sha256:25ca9a4e6e04d0c0a76c6c7fc2da408e35e31a9dab305b33d81f3e57fc418784
-generated: "2025-05-02T10:25:49.335418+02:00"
+generated: "2025-05-05T16:25:58.180345+02:00"
