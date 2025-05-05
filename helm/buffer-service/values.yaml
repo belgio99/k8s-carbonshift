@@ -21,7 +21,7 @@ fullnameOverride: ""
 
 # Environment variables for the container
 env:
-  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_HOST: "carbonshift-rabbitmq.carbonshift-system.svc.cluster.local"
   RABBITMQ_PORT: "5672"
   RABBITMQ_USER: "carbonuser"
   RABBITMQ_PASS: "supersecret"
@@ -100,7 +100,7 @@ livenessProbe:
     port: http
 readinessProbe:
   httpGet:
-    path: /
+    path: /readyz
     port: http
 
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/

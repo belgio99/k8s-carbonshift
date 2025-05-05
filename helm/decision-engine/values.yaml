@@ -92,7 +92,7 @@ livenessProbe:
     port: http
 readinessProbe:
   httpGet:
-    path: /
+    path: /readyz
     port: http
 
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
