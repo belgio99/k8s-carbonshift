@@ -6,11 +6,13 @@ rabbitmq:
     username: carbonuser
     password: supersecret
     erlangCookie: verysecretcookie
-  replicaCount: 2
+  replicaCount: 1
   resources:
     requests:
       cpu: 100m
       memory: 256Mi
+  clustering:
+    forceBoot: true
 
 # Istio component configuration
 base:

@@ -19,11 +19,6 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-
-# This is to set the flavour of the image. The default is HighPower.
-# Available flavours are: LowPower, MediumPower, HighPower.
-flavour: "HighPower"
-
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
   # Specifies whether a service account should be created
@@ -87,7 +82,7 @@ resources:
     cpu: 500m
     memory: 256Mi
   requests:
-    cpu: 100m
+    cpu: 50m
     memory: 128Mi
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
@@ -126,3 +121,11 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+instances:
+  - name: high-power
+    flavour: "HighPower"
+  - name: mid-power
+    flavour: "MediumPower"
+  - name: low-power
+    flavour: "LowPower"
