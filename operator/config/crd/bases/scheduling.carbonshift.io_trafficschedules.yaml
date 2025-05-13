@@ -39,6 +39,10 @@ spec:
           spec:
             description: TrafficScheduleSpec defines the desired state of TrafficSchedule.
             properties:
+              directWeight:
+                description: 'DirectWeight: how much of the traffic should be scheduled
+                  directly to the application (percentage)'
+                type: integer
               flavorRules:
                 items:
                   description: FlavorRule defines the rules for a specific flavor.
@@ -48,22 +52,29 @@ spec:
                       type: integer
                     flavorName:
                       type: string
-                    percentage:
-                      description: 'Percentage: how much of the traffic should be
-                        scheduled to this flavor'
+                    weight:
+                      description: 'Weight: how much of the traffic should be scheduled
+                        to this flavor (percentage)'
                       type: integer
                   required:
                   - deadlineSec
                   - flavorName
-                  - percentage
+                  - weight
                   type: object
                 type: array
-              maxDelaySeconds:
-                description: 'MaxDelaySeconds: max buffer delay in seconds'
+              queueWeight:
+                description: 'QueueWeight: how much of the traffic should be scheduled
+                  to the queue (percentage)'
                 type: integer
+              validUntil:
+                description: 'ValidUntil: when the schedule is valid'
+                format: date-time
+                type: string
             required:
+            - directWeight
             - flavorRules
-            - maxDelaySeconds
+            - queueWeight
+            - validUntil
             type: object
           status:
             description: TrafficScheduleStatus defines the observed state of TrafficSchedule.

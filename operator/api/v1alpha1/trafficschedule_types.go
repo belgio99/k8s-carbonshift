@@ -29,15 +29,19 @@ type TrafficScheduleSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	FlavorRules []FlavorRule `json:"flavorRules"`
-	// MaxDelaySeconds: max buffer delay in seconds
-	MaxDelaySeconds int `json:"maxDelaySeconds"`
+	// DirectWeight: how much of the traffic should be scheduled directly to the application (percentage)
+	DirectWeight int `json:"directWeight"`
+	// QueueWeight: how much of the traffic should be scheduled to the queue (percentage)
+	QueueWeight int `json:"queueWeight"`
+	// ValidUntil: when the schedule is valid
+	ValidUntil metav1.Time `json:"validUntil"`
 }
 
 // FlavorRule defines the rules for a specific flavor.
 type FlavorRule struct {
 	FlavorName string `json:"flavorName"`
-	// Percentage: how much of the traffic should be scheduled to this flavor
-	Percentage int `json:"percentage"`
+	// Weight: how much of the traffic should be scheduled to this flavor (percentage)
+	Weight int `json:"weight"`
 	// DeadlineSec: max delay in seconds
 	DeadlineSec int `json:"deadlineSec"`
 }

@@ -1,0 +1,19 @@
+apiVersion: scheduling.carbonshift.io/v1alpha1
+kind: TrafficSchedule
+metadata:
+  name: traffic-schedule
+  namespace: carbonshift-system
+spec:
+  directWeight: 80
+  queueWeight: 20
+  flavorRules:
+    - flavorName: high-power
+      weight: 20
+      deadlineSec: 30
+    - flavorName: mid-power
+      weight: 30
+      deadlineSec: 120
+    - flavorName: low-power
+      weight: 50
+      deadlineSec: 600
+  validUntil: "2025-01-01T00:00:00Z"

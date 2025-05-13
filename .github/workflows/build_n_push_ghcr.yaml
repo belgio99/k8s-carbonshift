@@ -23,11 +23,12 @@ jobs:
             carbonstat/**
             buffer-service/**
             decision-engine/**
+            operator/**
 
       - name: Parse changed services
         id: parse-changes
         run: |
-          services="carbonstat buffer-service decision-engine"
+          services="carbonstat buffer-service decision-engine operator"
           changed_services=""
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             changed_services="$services"
@@ -53,7 +54,8 @@ jobs:
         service: [
           carbonstat,
           buffer-service,
-          decision-engine
+          decision-engine,
+          operator
         ]
 
     steps:
