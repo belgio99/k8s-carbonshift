@@ -22,6 +22,7 @@ spec:
       labels:
         {{- include "carbonstat.labels" $ | nindent 8 }}
         instance: {{ .name }}
+        carbonshift: {{ .flavour | quote }}
         {{- with $.Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

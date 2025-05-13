@@ -124,8 +124,8 @@ affinity: {}
 
 instances:
   - name: high-power
-    flavour: "HighPower"
+    flavour: "high"
   - name: mid-power
-    flavour: "MediumPower"
+    flavour: "mid"
   - name: low-power
-    flavour: "LowPower"
+    flavour: "low"
