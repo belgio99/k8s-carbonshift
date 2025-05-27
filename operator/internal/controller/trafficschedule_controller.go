@@ -64,7 +64,7 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// 1) Get schedule from decision engine
-	resp, err := http.Get("http://decision-engine.carbonshift-system.svc.cluster.local/schedule")
+	resp, err := http.Get("http://carbonshift-decision-engine.carbonshift-system.svc.cluster.local/schedule")
 	if err != nil {
 		ctrl.Log.Error(err, "Failed to get traffic schedule")
 		return ctrl.Result{}, err
