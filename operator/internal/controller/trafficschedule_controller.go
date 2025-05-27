@@ -110,6 +110,7 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// 5) Requeue if the schedule is valid until a specific time
 	if !existing.Spec.ValidUntil.Time.IsZero() {
+		ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: "+existing.Spec.ValidUntil.Time.String(), "name", req.Name)
 		return ctrl.Result{RequeueAfter: time.Until(existing.Spec.ValidUntil.Time)}, nil
 	}
 	return ctrl.Result{}, nil
