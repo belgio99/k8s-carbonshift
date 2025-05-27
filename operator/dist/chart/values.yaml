@@ -4,7 +4,7 @@ controllerManager:
   container:
     image:
       repository: ghcr.io/belgio99/k8s-carbonshift/operator
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Never
       tag: latest
     args:
       - "--leader-elect"
