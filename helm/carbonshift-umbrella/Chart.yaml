@@ -47,4 +47,4 @@ dependencies:
 
   - name: carbonshift-operator
     version: 0.1.0
-    repository: file://../carbonshift-operator
+    repository: file://../../operator/dist/chart

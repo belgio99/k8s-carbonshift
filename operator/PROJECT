@@ -5,6 +5,8 @@
 domain: carbonshift.io
 layout:
 - go.kubebuilder.io/v4
+plugins:
+  helm.kubebuilder.io/v1-alpha: {}
 projectName: operator
 repo: github.com/belgio/k8s-carbonaware-scheduler/operator
 resources:

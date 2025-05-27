@@ -1,0 +1,93 @@
+{{- if .Values.crd.enable }}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.crd.keep }}
+    "helm.sh/resource-policy": keep
+    {{- end }}
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: trafficschedules.scheduling.carbonshift.io
+spec:
+  group: scheduling.carbonshift.io
+  names:
+    kind: TrafficSchedule
+    listKind: TrafficScheduleList
+    plural: trafficschedules
+    singular: trafficschedule
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TrafficSchedule is the Schema for the trafficschedules API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TrafficScheduleSpec defines the desired state of TrafficSchedule.
+            properties:
+              directWeight:
+                description: 'DirectWeight: how much of the traffic should be scheduled
+                  directly to the application (percentage)'
+                type: integer
+              flavorRules:
+                items:
+                  description: FlavorRule defines the rules for a specific flavor.
+                  properties:
+                    deadlineSec:
+                      description: 'DeadlineSec: max delay in seconds'
+                      type: integer
+                    flavorName:
+                      type: string
+                    weight:
+                      description: 'Weight: how much of the traffic should be scheduled
+                        to this flavor (percentage)'
+                      type: integer
+                  required:
+                  - deadlineSec
+                  - flavorName
+                  - weight
+                  type: object
+                type: array
+              queueWeight:
+                description: 'QueueWeight: how much of the traffic should be scheduled
+                  to the queue (percentage)'
+                type: integer
+              validUntil:
+                description: 'ValidUntil: when the schedule is valid'
+                format: date-time
+                type: string
+            required:
+            - directWeight
+            - flavorRules
+            - queueWeight
+            - validUntil
+            type: object
+          status:
+            description: TrafficScheduleStatus defines the observed state of TrafficSchedule.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- end -}}
