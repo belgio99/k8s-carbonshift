@@ -102,23 +102,24 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// 4) Overwrite old status with the new one
-	if !reflect.DeepEqual(existing.Status, status) {
-		existing.Status = status
-		if err := r.Status().Update(ctx, &existing); err != nil {
-			ctrl.Log.Error(err, "unable to update TrafficSchedule status")
-			return ctrl.Result{}, err
-		}
-	}
+   statusChanged := !reflect.DeepEqual(existing.Status, status)
+	if statusChanged {
+   	existing.Status = status
+	if err := r.Status().Update(ctx, &existing); err != nil {
+      ctrl.Log.Error(err, "unable to update TrafficSchedule status")
+		return ctrl.Result{}, err
+      }
+   }
 
-	// 5) Requeue if the schedule is valid until a specific time
-	if !existing.Status.ValidUntil.Time.IsZero() {
-		delay := time.Until(existing.Status.ValidUntil.Time)
+// 5) Calculate the next reconcile time
+	if !status.ValidUntil.Time.IsZero() {
+      delay := time.Until(status.ValidUntil.Time)
 		if delay < 0 {
-			delay = 0
-		}
-		ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: ", "nextReconcileTime", existing.Status.ValidUntil.Time)
+         delay = 0
+      }
+      ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: ", "nextReconcileTime", status.ValidUntil.Time)
 		return ctrl.Result{RequeueAfter: delay}, nil
-	}
+   }
 	return ctrl.Result{}, nil
 }
 
