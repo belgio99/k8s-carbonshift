@@ -27,13 +27,7 @@ type TrafficScheduleSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	FlavorRules []FlavorRule `json:"flavorRules"`
-	// DirectWeight: how much of the traffic should be scheduled directly to the application (percentage)
-	DirectWeight int `json:"directWeight"`
-	// QueueWeight: how much of the traffic should be scheduled to the queue (percentage)
-	QueueWeight int `json:"queueWeight"`
-	// ValidUntil: when the schedule is valid
-	ValidUntil metav1.Time `json:"validUntil"`
+
 }
 
 // FlavorRule defines the rules for a specific flavor.
@@ -49,6 +43,14 @@ type FlavorRule struct {
 type TrafficScheduleStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	FlavorRules []FlavorRule `json:"flavorRules"`
+	// DirectWeight: how much of the traffic should be scheduled directly to the application (percentage)
+	DirectWeight int `json:"directWeight"`
+	// QueueWeight: how much of the traffic should be scheduled to the queue (percentage)
+	QueueWeight int `json:"queueWeight"`
+	// ValidUntil: when the schedule is valid
+	ValidUntil metav1.Time `json:"validUntil"`
 }
 
 // +kubebuilder:object:root=true

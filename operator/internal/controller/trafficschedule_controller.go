@@ -84,41 +84,39 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	// 3) Create the spec for the TrafficSchedule CR
-	spec := schedulingv1alpha1.TrafficScheduleSpec{
+	// 3) Create the status for the TrafficSchedule CR
+	status := schedulingv1alpha1.TrafficScheduleStatus{
 		DirectWeight: int(remote.DirectWeight),
 		QueueWeight:  int(remote.QueueWeight),
 	}
 	for flavor, w := range remote.FlavorWeights {
 		dl := remote.Deadlines[flavor]
-		spec.FlavorRules = append(spec.FlavorRules, schedulingv1alpha1.FlavorRule{
+		status.FlavorRules = append(status.FlavorRules, schedulingv1alpha1.FlavorRule{
 			FlavorName:  flavor,
 			Weight:      int(w),
 			DeadlineSec: int(dl),
 		})
 	}
 	if t, err := time.Parse(time.RFC3339, remote.ValidUntilISO); err == nil {
-		spec.ValidUntil = metav1.NewTime(t)
+		status.ValidUntil = metav1.NewTime(t)
 	}
 
-	// 4) Overwrite old spec with the new one
-	if !reflect.DeepEqual(existing.Spec, spec) {
-        existing.Spec = spec
-        if err := r.Update(ctx, &existing); err != nil {
-            ctrl.Log.Error(err, "unable to update TrafficSchedule")
-            return ctrl.Result{}, err
-        }
-        // The update will trigger a new reconcile, so we can return here
-        return ctrl.Result{}, nil
-    }
+	// 4) Overwrite old status with the new one
+	if !reflect.DeepEqual(existing.Status, status) {
+		existing.Status = status
+		if err := r.Status().Update(ctx, &existing); err != nil {
+			ctrl.Log.Error(err, "unable to update TrafficSchedule status")
+			return ctrl.Result{}, err
+		}
+	}
 
 	// 5) Requeue if the schedule is valid until a specific time
-	if !existing.Spec.ValidUntil.Time.IsZero() {
-		delay := time.Until(existing.Spec.ValidUntil.Time)
+	if !existing.Status.ValidUntil.Time.IsZero() {
+		delay := time.Until(existing.Status.ValidUntil.Time)
 		if delay < 0 {
 			delay = 0
 		}
-		ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: ", "nextReconcileTime", existing.Spec.ValidUntil.Time)
+		ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: ", "nextReconcileTime", existing.Status.ValidUntil.Time)
 		return ctrl.Result{RequeueAfter: delay}, nil
 	}
 	return ctrl.Result{}, nil
