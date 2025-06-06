@@ -102,16 +102,24 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// 4) Overwrite old spec with the new one
-	existing.Spec = spec
-	if err := r.Update(ctx, &existing); err != nil {
-		ctrl.Log.Error(err, "Failed to update TrafficSchedule")
-		return ctrl.Result{}, err
-	}
+	if !reflect.DeepEqual(existing.Spec, spec) {
+        existing.Spec = spec
+        if err := r.Update(ctx, &existing); err != nil {
+            ctrl.Log.Error(err, "unable to update TrafficSchedule")
+            return ctrl.Result{}, err
+        }
+        // The update will trigger a new reconcile, so we can return here
+        return ctrl.Result{}, nil
+    }
 
 	// 5) Requeue if the schedule is valid until a specific time
 	if !existing.Spec.ValidUntil.Time.IsZero() {
-		ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: "+existing.Spec.ValidUntil.Time.String(), "name", req.Name)
-		return ctrl.Result{RequeueAfter: time.Until(existing.Spec.ValidUntil.Time)}, nil
+		delay := time.Until(existing.Spec.ValidUntil.Time)
+		if delay < 0 {
+			delay = 0
+		}
+		ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: ", "nextReconcileTime", existing.Spec.ValidUntil.Time)
+		return ctrl.Result{RequeueAfter: delay}, nil
 	}
 	return ctrl.Result{}, nil
 }
