@@ -61,4 +61,4 @@ def readiness_check():
     return jsonify({"status": "ready"}), 200
 
 
-app.run(host="0.0.0.0", port=50000)
+app.run(host="0.0.0.0", port=80)

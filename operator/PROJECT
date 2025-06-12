@@ -26,4 +26,10 @@ resources:
   kind: FlavourRouter
   path: k8s.io/api/scheduling/v1alpha1
   version: v1alpha1
+- core: true
+  domain: k8s.io
+  group: networking
+  kind: DestinationRule
+  path: k8s.io/api/networking/v1alpha3
+  version: v1alpha3
 version: "3"
