@@ -8,8 +8,29 @@ metadata:
   name: operator-manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - networking.istio.io
   resources:
+  - destinationrules
   - virtualservices
   verbs:
   - create
@@ -41,6 +62,32 @@ rules:
   - scheduling.carbonshift.io
   resources:
   - trafficschedules/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - flavourrouters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - flavourrouters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - flavourrouters/status
   verbs:
   - get
   - patch

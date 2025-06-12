@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/belgio/k8s-carbonaware-scheduler/operator/test/utils"
+	"github.com/belgio99/k8s-carbonshift/operator/test/utils"
 )
 
 // namespace where the project is deployed in
