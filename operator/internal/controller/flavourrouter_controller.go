@@ -91,7 +91,11 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	directW := trafficschedule.DirectWeight
 	queueW := trafficschedule.QueueWeight
 
-	// 4. Create or update the DestinationRule and VirtualServices
+	// 4. Create or update the Gateway, DestinationRule and VirtualServices
+
+	if err := r.ensureGateway(ctx, svc); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.ensureDR(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -117,6 +121,57 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: delay}, nil
 	}
 	return ctrl.Result{}, nil
+}
+
+
+func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context,svc corev1.Service) error {
+
+	ctrl.LoggerFrom(ctx).Info("Ensuring Gateway for service", "service", svc.Name)
+	name := fmt.Sprintf("%s-entry-gw", svc.Name)
+
+	if len(svc.Spec.Ports) == 0 {
+		return fmt.Errorf("service %s/%s has no ports defined", svc.Namespace, svc.Name)
+	}
+	p := svc.Spec.Ports[0] // prendiamo la prima porta
+	proto := "HTTP"
+	if p.Port == 443 || p.Name == "https" {
+		proto = "HTTPS"
+	}
+
+	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
+
+	gw := networkingkube.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
+		Spec: networkingapi.Gateway{
+			Selector: map[string]string{"istio": "ingressgateway"}, // use the default Istio ingress gateway
+			Servers: []*networkingapi.Server{{
+				Port: &networkingapi.Port{
+					Number:   uint32(p.Port),
+					Name:     p.Name,
+					Protocol: proto,
+				},
+				Hosts: []string{host},
+			}},
+		},
+	}
+
+	if err := ctrl.SetControllerReference(&svc, &gw, r.Scheme); err != nil {
+		return err
+	}
+
+	var cur networkingkube.Gateway
+	err := r.Get(ctx, client.ObjectKey{Namespace: svc.Namespace, Name: name}, &cur)
+	switch {
+	case apierrors.IsNotFound(err):
+		return r.Create(ctx, &gw)
+	case err != nil:
+		return err
+	case !reflect.DeepEqual(cur.Spec, gw.Spec):
+		cur.Spec = gw.Spec
+		ctrl.LoggerFrom(ctx).Info("Gateway updated", "name", name, "namespace", svc.Namespace)
+		return r.Update(ctx, &cur)
+	}
+	return nil
 }
 
 func (r *FlavourRouterReconciler) ensureDR(ctx context.Context, svc *corev1.Service) error {
@@ -162,7 +217,8 @@ func (r *FlavourRouterReconciler) ensureEntryVS(ctx context.Context, svc *corev1
 	vs := networkingkube.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
 		Spec: networkingapi.VirtualService{
-			Hosts: []string{host},
+			Hosts:    []string{host},
+			Gateways: []string{fmt.Sprintf("%s/%s-entry-gw", svc.Namespace, svc.Name)},
 			Http: []*networkingapi.HTTPRoute{
 				{
 					Match: []*networkingapi.HTTPMatchRequest{{
