@@ -5,10 +5,10 @@ import (
     "context"
     "fmt"
     "reflect"
-    "strconv"
+    //"strconv"
     "time"
 
-    appsv1 "k8s.io/api/apps/v1"
+    //appsv1 "k8s.io/api/apps/v1"
     corev1 "k8s.io/api/core/v1"
     apierrors "k8s.io/apimachinery/pkg/api/errors"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +31,7 @@ import (
 /* ─────────────────────────────────────────  Costanti  ───────────────────────────────────────── */
 const (
     carbonLabel            = "carbonshift"                   // high|mid|low
-    enableAnnotation       = "carbonshift/enabled"           // opt-in
+    enableLabel       = "carbonshift/enabled"           // opt-in
     origReplicasAnnotation = "carbonshift/original-replicas" // remember replicas
     defaultRequeue         = 30 * time.Second
 )
@@ -50,7 +50,7 @@ type FlavourRouterReconciler struct {
 
 /* -------------------------- RBAC -------------------------- */
 
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=scheduling.carbonshift.io,resources=trafficschedules,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices;destinationrules,verbs=get;list;watch;create;update;patch;delete
@@ -61,12 +61,12 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
     log := ctrl.LoggerFrom(ctx).WithValues("service", req.NamespacedName)
 
     // 1. Service opt-in
-    // Gets the service that has the annotation "carbonshift/enabled=true", which is our "target" service.
+    // Gets the service that has the label "carbonshift/enabled=true", which is our "target" service.
     var svc corev1.Service
     if err := r.Get(ctx, req.NamespacedName, &svc); err != nil {
         return ctrl.Result{}, client.IgnoreNotFound(err)
     }
-    if svc.Annotations[enableAnnotation] != "true" {
+    if svc.Labels[enableLabel] != "true" {
         return ctrl.Result{}, nil
     }
 
@@ -281,10 +281,10 @@ func (r *FlavourRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
     svcPred := predicate.Funcs{
         CreateFunc: func(e event.CreateEvent) bool {
-            return e.Object.GetAnnotations()[enableAnnotation] == "true"
+            return e.Object.GetLabels()[enableLabel] == "true"
         },
         UpdateFunc: func(e event.UpdateEvent) bool {
-            return e.ObjectNew.GetAnnotations()[enableAnnotation] == "true"
+            return e.ObjectNew.GetLabels()[enableLabel] == "true"
         },
         DeleteFunc: func(event.DeleteEvent) bool { return false },
     }
@@ -294,7 +294,7 @@ func (r *FlavourRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
         if err := mgr.GetClient().List(ctx, &list); err != nil { return nil }
         var out []reconcile.Request
         for _, s := range list.Items {
-            if s.Annotations[enableAnnotation] == "true" {
+            if s.Labels[enableLabel] == "true" {
                 out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&s)})
             }
         }
