@@ -54,7 +54,7 @@ type FlavourRouterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=scheduling.carbonshift.io,resources=trafficschedules,verbs=get;list;watch
-// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices;destinationrules,gateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices;destinationrules;gateways,verbs=get;list;watch;create;update;patch;delete
 
 /* -------------------------- Reconcile -------------------------- */
 

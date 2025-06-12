@@ -28,6 +28,7 @@ rules:
   - networking.istio.io
   resources:
   - destinationrules
+  - gateways
   - virtualservices
   verbs:
   - create
