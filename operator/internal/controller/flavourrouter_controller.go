@@ -54,7 +54,7 @@ type FlavourRouterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=scheduling.carbonshift.io,resources=trafficschedules,verbs=get;list;watch
-// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices;destinationrules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices;destinationrules,gateways,verbs=get;list;watch;create;update;patch;delete
 
 /* -------------------------- Reconcile -------------------------- */
 
@@ -132,7 +132,7 @@ func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context,svc corev1.S
 	if len(svc.Spec.Ports) == 0 {
 		return fmt.Errorf("service %s/%s has no ports defined", svc.Namespace, svc.Name)
 	}
-	p := svc.Spec.Ports[0] // prendiamo la prima porta
+	p := svc.Spec.Ports[0] // using the first port defined in the service
 	proto := "HTTP"
 	if p.Port == 443 || p.Name == "https" {
 		proto = "HTTPS"
