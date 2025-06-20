@@ -1,0 +1,12 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY common.py router.py ./
+
+RUN pip install --no-cache-dir fastapi uvicorn[standard] aio-pika httpx \
+      python-dateutil prometheus-client
+
+EXPOSE 8000 8001
+
+CMD ["python", "router.py"]

@@ -49,6 +49,8 @@ type TrafficScheduleStatus struct {
 	DirectWeight int `json:"directWeight"`
 	// QueueWeight: how much of the traffic should be scheduled to the queue (percentage)
 	QueueWeight int `json:"queueWeight"`
+	// ConsumptionEnabled: whether the traffic consumption is enabled
+	ConsumptionEnabled bool `json:"consumptionEnabled"`
 	// ValidUntil: when the schedule is valid
 	ValidUntil metav1.Time `json:"validUntil"`
 }

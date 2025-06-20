@@ -123,8 +123,7 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
-
-func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context,svc corev1.Service) error {
+func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context, svc corev1.Service) error {
 
 	ctrl.LoggerFrom(ctx).Info("Ensuring Gateway for service", "service", svc.Name)
 	name := fmt.Sprintf("%s-entry-gw", svc.Name)
@@ -138,12 +137,12 @@ func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context,svc corev1.S
 		proto = "HTTPS"
 	}
 
-	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
+	host := fmt.Sprintf("%s.example.com", svc.Name)
 
 	gw := networkingkube.Gateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
 		Spec: networkingapi.Gateway{
-			Selector: map[string]string{"istio": "ingressgateway"}, // use the default Istio ingress gateway
+			Selector: map[string]string{"istio": "gateway"}, // use the default Istio ingress gateway
 			Servers: []*networkingapi.Server{{
 				Port: &networkingapi.Port{
 					Number:   uint32(p.Port),
@@ -211,13 +210,14 @@ func (r *FlavourRouterReconciler) ensureDR(ctx context.Context, svc *corev1.Serv
 func (r *FlavourRouterReconciler) ensureEntryVS(ctx context.Context, svc *corev1.Service, directW, queueW int) error {
 	ctrl.LoggerFrom(ctx).Info("Ensuring Entry VirtualService for service", "service", svc.Name)
 	name := fmt.Sprintf("%s-entry-vs", svc.Name)
-	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
+	host := fmt.Sprintf("%s-flavour-vs.%s.svc.cluster.local", svc.Name, svc.Namespace)
+    sourceHost := fmt.Sprintf("%s.example.com", svc.Namespace)
 	queueHost := fmt.Sprintf("%s%s.%s.svc.cluster.local", svc.Name, queueSvcSuffix, svc.Namespace)
 
 	vs := networkingkube.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
 		Spec: networkingapi.VirtualService{
-			Hosts:    []string{host},
+			Hosts:    []string{sourceHost},
 			Gateways: []string{fmt.Sprintf("%s/%s-entry-gw", svc.Namespace, svc.Name)},
 			Http: []*networkingapi.HTTPRoute{
 				{
@@ -268,6 +268,8 @@ func (r *FlavourRouterReconciler) ensureEntryVS(ctx context.Context, svc *corev1
 func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *corev1.Service, directW int, wFl map[string]int) error {
 	name := fmt.Sprintf("%s-flavour-vs", svc.Name)
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
+    sourceHost := fmt.Sprintf("%s-flavour-vs.%s.svc.cluster.local", svc.Name, svc.Namespace)
+    
 	ctrl.LoggerFrom(ctx).Info("Ensuring Flavour VirtualService for service", "service", svc.Name)
 
 	highW := int32(wFl["high-power"])
@@ -306,7 +308,7 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 	vs := networkingkube.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
 		Spec: networkingapi.VirtualService{
-			Hosts: []string{host},
+			Hosts: []string{sourceHost},
 			Http:  httpRoutes,
 		},
 	}

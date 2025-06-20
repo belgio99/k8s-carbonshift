@@ -77,6 +77,7 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		QueueWeight   int            `json:"queueWeight"`
 		FlavorWeights map[string]int `json:"flavorWeights"`
 		Deadlines     map[string]int `json:"deadlines"`
+		ConsumptionEnabled bool `json:"consumptionEnabled"`
 		ValidUntilISO string         `json:"validUntil"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&remote); err != nil {
@@ -88,6 +89,7 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	status := schedulingv1alpha1.TrafficScheduleStatus{
 		DirectWeight: int(remote.DirectWeight),
 		QueueWeight:  int(remote.QueueWeight),
+		ConsumptionEnabled: remote.ConsumptionEnabled,
 	}
 	for flavor, w := range remote.FlavorWeights {
 		dl := remote.Deadlines[flavor]
