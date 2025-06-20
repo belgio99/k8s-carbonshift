@@ -112,7 +112,7 @@ async def main():
         loop.create_task(worker(loop, chan, f"direct.{flav}", keeper, httpc))
         loop.create_task(worker(loop, chan, f"queue.{flav}",  keeper, httpc))
 
-    # metrics server endpoint
+    # metrics server
     loop.create_task(uvicorn.run(app, host="0.0.0.0", port=METRICS_PORT, lifespan="off"))
 
     for s in (signal.SIGINT, signal.SIGTERM):
