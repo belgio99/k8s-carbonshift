@@ -91,7 +91,7 @@ jobs:
 
   build-router:
     needs: detect-changed-services
-    if: needs.detect-changed-services.outputs.changed-services == 'buffer-service'
+    if: contains(needs.detect-changed-services.outputs.changed-services, 'buffer-service')
     runs-on: ubuntu-latest
     concurrency: 
       group: build-containers-${{ matrix.service }}
