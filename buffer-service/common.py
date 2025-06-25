@@ -4,7 +4,7 @@ from typing import Dict
 loglevel = os.getenv("LOGLEVEL", "INFO").upper()
 logging.basicConfig(level=loglevel,
                     format="%(asctime)s %(levelname)s %(name)s — %(message)s")
-log = logging.getLogger("common")
+log = logging.getLogger("carbonshift")
 
 def b64enc(data: bytes) -> str:
     return base64.b64encode(data).decode()

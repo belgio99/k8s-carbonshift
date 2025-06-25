@@ -1,166 +1,307 @@
 """
-Servizio HTTP sincrono → pubblica su RabbitMQ → attende reply.
-Espone anche /metrics per Prometheus.
+carbonshift_router.py
+HTTP → RabbitMQ router with “direct/queue” load balancing based on
+CustomResource (TrafficSchedule). Exposes Prometheus metrics.
 """
-import os, asyncio, uuid, json, datetime, signal
-import aio_pika, httpx, dateutil.parser
-from fastapi import FastAPI, Request, Response, HTTPException
-from prometheus_client import Counter, Histogram, Gauge, CONTENT_TYPE_LATEST, generate_latest
+
+from __future__ import annotations
+
+import asyncio
+import datetime as dt
+import json
+import os
+import uuid
+from typing import Any, Dict
+
+import aio_pika
+import httpx
 import uvicorn
-from common import b64enc, b64dec, weighted_choice, DEFAULT_SCHEDULE, log
+from dateutil import parser as date_parser
+from fastapi import FastAPI, HTTPException, Request, Response
+from kubernetes import client, config, watch as k8s_watch
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
+from common import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
 
-RABBIT_URL       = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-TS_NS            = os.getenv("TS_NAMESPACE", "default")
-TS_NAME          = os.getenv("TS_NAME", "current")
-METRICS_PORT     = int(os.getenv("METRICS_PORT", "8001"))
+# ────────────────────────────────────
+# Config / env
+# ────────────────────────────────────
+RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+TRAFFIC_SCHEDULE_NAME: str = os.getenv("TRAFFIC_SCHEDULE_NAME", "default")
+METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
+SERVICE_NAME: str = os.getenv("SERVICE_NAME", "unknown-svc").lower()
+POD_NAMESPACE: str = os.getenv("POD_NAMESPACE", "default").lower()
 
+# ────────────────────────────────────
+# Prometheus metrics
+# ────────────────────────────────────
+HTTP_REQUESTS = Counter(
+    "router_http_requests_total",
+    "HTTP requests",
+    ["method", "status", "qtype", "flavour", "forced"],
+)
 
-REQS  = Counter ("router_http_requests_total",
-                 "Total HTTP requests", ["method","status","qtype","flavour","forced"])
-LAT   = Histogram("router_request_duration_seconds",
-                 "End-to-end latency", ["qtype","flavour"])
-PUBL  = Counter ("router_messages_published_total",
-                 "Messages published to RabbitMQ", ["queue"])
-TTL_G = Gauge   ("router_schedule_valid_seconds",
-                 "Seconds before current schedule expires")
+HTTP_LATENCY = Histogram(
+    "router_request_duration_seconds",
+    "End-to-end latency",
+    ["qtype", "flavour"],
+)
 
+PUBLISHED_MESSAGES = Counter(
+    "router_messages_published_total",
+    "Messages published",
+    ["queue"],
+)
 
-class ScheduleKeeper:
-    def __init__(self):
-        self.current = DEFAULT_SCHEDULE.copy()
-        self._lock  = asyncio.Lock()
-        # Kubernetes client è opzionale: lo importiamo solo se in cluster
-        from kubernetes import client, config, watch
+SCHEDULE_TTL = Gauge(
+    "router_schedule_valid_seconds",
+    "Seconds until schedule expiry",
+)
+
+# ────────────────────────────────────
+# Schedule keeper
+# ────────────────────────────────────
+class TrafficScheduleManager:
+    """
+    Caches the TrafficSchedule (cluster-scoped CustomResource).
+    Responsibilities:
+      • initial load
+      • continuous watch
+      • refresh on expiry (validUntil)
+    """
+
+    def __init__(self, name: str) -> None:
+        self._name: str = name
+        self._current: dict[str, Any] = DEFAULT_SCHEDULE.copy()
+        self._lock = asyncio.Lock()
+
+        # Kubernetes client setup
         try:
             config.load_incluster_config()
         except Exception:
             config.load_kube_config()
-        self._api   = client.CustomObjectsApi()
-        self._watch = watch.Watch()
 
-    async def refresh_now(self):
+        self._api = client.CustomObjectsApi()
+        self._watch = k8s_watch.Watch()
+
+    # ──────────────── public ────────────────
+    async def snapshot(self) -> dict[str, Any]:
+        """Returns a thread-safe copy of the current schedule."""
+        async with self._lock:
+            return self._current.copy()
+
+    # ──────────────── upkeep tasks ────────────────
+    async def load_once(self) -> None:
+        """Loads the schedule once (on startup or after expiry)."""
         try:
             obj = await asyncio.to_thread(
-                self._api.get_namespaced_custom_object,
-                group="carbonshift.io", version="v1",
-                namespace=TS_NS, plural="trafficschedules", name=TS_NAME)
+                self._api.get_cluster_custom_object,
+                group="scheduling.carbonshift.io",
+                version="v1",
+                plural="trafficschedules",
+                name=self._name,
+            )
             async with self._lock:
-                self.current = obj["spec"]
-                log.info("Schedule updated (manual fetch)")
-        except Exception as e:
-            log.warning("Cannot fetch TrafficSchedule: %s", e)
+                self._current = obj["spec"]
+            log.info("Schedule loaded")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Schedule load failed: %s", exc)
 
-    async def watch_cr(self):
+    async def watch_forever(self) -> None:
+        """Continuous stream of events on the CR; updates the cache in real-time."""
+        field_selector = f"metadata.name={self._name}"
+
         while True:
             try:
                 stream = self._watch.stream(
-                    self._api.get_namespaced_custom_object,
-                    group="carbonshift.io", version="v1",
-                    namespace=TS_NS, plural="trafficschedules",
-                    name=TS_NAME, timeout_seconds=90)
+                    self._api.list_cluster_custom_object,
+                    group="scheduling.carbonshift.io",
+                    version="v1",
+                    plural="trafficschedules",
+                    field_selector=field_selector,
+                    timeout_seconds=90,
+                )
                 for event in stream:
                     async with self._lock:
-                        self.current = event["object"]["spec"]
-                        log.info("Schedule updated via watch")
-            except Exception as e:
-                log.error("watch_cr error: %s", e)
+                        self._current = event["object"]["spec"]
+                    log.info("Schedule updated (watch)")
+            except Exception as exc:  # noqa: BLE001
+                log.error("Watch error: %s", exc)
                 await asyncio.sleep(5)
 
-    async def valid_until_refresher(self):
+    async def expiry_guard(self) -> None:
+        """
+        Updates the Prometheus gauge with seconds until `validUntil`
+        and forces a reload when it expires.
+        """
         while True:
             async with self._lock:
-                vu = self.current.get("validUntil")
+                valid_until = self._current.get("validUntil")
+
             try:
-                dt = dateutil.parser.isoparse(vu)
-                delta = (dt - datetime.datetime.utcnow()).total_seconds()
-            except Exception:
-                delta = 60
-            TTL_G.set(delta)
-            await asyncio.sleep(max(delta, 0)+1)
-            await self.refresh_now()
+                expiry_dt = date_parser.isoparse(valid_until)
+                seconds_to_expiry = max(
+                    (expiry_dt - dt.datetime.utcnow()).total_seconds(),
+                    0,
+                )
+            except Exception:  # noqa: BLE001
+                seconds_to_expiry = 60  # fallback
 
-    async def get(self):
-        async with self._lock:
-            return self.current.copy()
+            SCHEDULE_TTL.set(seconds_to_expiry)
 
-# ─────────── build FastAPI app ───────────
-def build_app(sched_keeper: ScheduleKeeper) -> FastAPI:
-    rabbit = {"conn": None, "chan": None}
+            # sleep until expiry, then reload
+            await asyncio.sleep(seconds_to_expiry + 1)
+            await self.load_once()
 
-    async def get_chan():
-        if rabbit["chan"] and not rabbit["chan"].is_closed:
-            return rabbit["chan"]
-        rabbit["conn"] = await aio_pika.connect_robust(RABBIT_URL)
-        rabbit["chan"] = await rabbit["conn"].channel()
-        return rabbit["chan"]
 
-    app = FastAPI(title="carbonshift-router", docs_url=None, redoc_url=None)
+# ────────────────────────────────────
+# FastAPI router
+# ────────────────────────────────────
+def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
+    """
+    Builds the FastAPI instance with:
+      • /metrics endpoint
+      • catch-all proxy that forwards to RabbitMQ
+    """
 
+    # Local state for RabbitMQ (reusable connection)
+    rabbit_state: dict[str, Any] = {"connection": None, "channel": None}
+
+    async def get_rabbit_channel() -> aio_pika.Channel:
+        """Returns a channel (opens one if necessary)."""
+        if rabbit_state["channel"] and not rabbit_state["channel"].is_closed:
+            return rabbit_state["channel"]
+
+        rabbit_state["connection"] = await aio_pika.connect_robust(RABBITMQ_URL)
+        rabbit_state["channel"] = await rabbit_state["connection"].channel()
+        return rabbit_state["channel"]
+
+    app = FastAPI(
+        title="carbonshift-router",
+        docs_url=None,
+        redoc_url=None,
+    )
+
+    # ───────────── /metrics ─────────────
     @app.get("/metrics")
-    async def metrics():
+    async def metrics() -> Response:
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-    @app.api_route("/{path:path}", methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"])
-    async def any_route(path: str, request: Request):
-        t0 = datetime.datetime.utcnow()
-        sched = await sched_keeper.get()
+    # ───────────── catch-all proxy ─────────────
+    @app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+    async def proxy(full_path: str, request: Request) -> Response:  # noqa: C901
+        """
+        Forwards the request to RabbitMQ choosing:
+          • direct vs queue
+          • flavour
+        Waits for the RPC response and forwards it to the HTTP client.
+        """
 
-        headers_in  = dict(request.headers)
-        urgent      = headers_in.get("X-Urgent", "false").lower() == "true"
-        forced      = headers_in.get("X-Carbonshift")
-        qtype       = "direct" if urgent else weighted_choice(
-                {"direct": sched["directWeight"], "queue": sched["queueWeight"]})
-        flavour     = forced or weighted_choice(sched["flavorWeights"])
-        dline       = sched["deadlines"].get(f"{flavour}-power", 60)
-        ttl_ms      = str(int(dline)*1000)
+        schedule = await schedule_manager.snapshot()
+        headers: Dict[str, str] = dict(request.headers)
 
-        body = await request.body()
-        payload = {"method": request.method,
-                   "path": "/"+path,
-                   "query": str(request.query_params),
-                   "headers": headers_in,
-                   "body": b64enc(body)}
+        # ─── select strategy / flavour ───
+        urgent = headers.get("X-Urgent", "false").lower() == "true"
+        forced_flavour = headers.get("X-Carbonshift")
 
-        corr = str(uuid.uuid4())
-        chan = await get_chan()
-        reply_q = await chan.declare_queue(exclusive=True, auto_delete=True)
+        q_type = (
+            "direct"
+            if urgent
+            else weighted_choice(
+                {"direct": schedule["directWeight"], "queue": schedule["queueWeight"]}
+            )
+        )
+        flavour = forced_flavour or weighted_choice(schedule["flavorWeights"])
+        deadline_sec = schedule["deadlines"].get(f"{flavour}-power", 60)
+        ttl_ms = str(int(deadline_sec * 1000))
 
-        await chan.default_exchange.publish(
+        # ─── build payload ───
+        payload = {
+            "method": request.method,
+            "path": f"/{full_path}",
+            "query": str(request.query_params),
+            "headers": headers,
+            "body": b64enc(await request.body()),
+        }
+
+        correlation_id = str(uuid.uuid4())
+        channel = await get_rabbit_channel()
+        reply_queue = await channel.declare_queue(exclusive=True, auto_delete=True)
+
+        # Publish the message
+        await channel.default_exchange.publish(
             aio_pika.Message(
-                body=json.dumps(payload).encode(),
-                correlation_id=corr,
-                reply_to=reply_q.name,
+                json.dumps(payload).encode(),
+                correlation_id=correlation_id,
+                reply_to=reply_queue.name,
                 headers={"flavour": flavour},
-                expiration=ttl_ms),
-            routing_key=f"{qtype}.{flavour}")
-        PUBL.labels(queue=f"{qtype}.{flavour}").inc()
+                expiration=ttl_ms,
+            ),
+            routing_key=f"{POD_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}",
+        )
+        PUBLISHED_MESSAGES.labels(queue=f"{POD_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}").inc()
 
+        # ─── wait for RPC response ───
         try:
-            msg = await reply_q.get(timeout=dline)
+            rabbit_msg = await reply_queue.get(timeout=deadline_sec)
         except asyncio.TimeoutError:
-            REQS.labels(request.method,"504",qtype,flavour,bool(forced)).inc()
-            raise HTTPException(504, "Upstream timeout")
+            HTTP_REQUESTS.labels(
+                request.method,
+                "504",
+                q_type,
+                flavour,
+                bool(forced_flavour),
+            ).inc()
+            raise HTTPException(status_code=504, detail="Upstream timeout")
 
-        with msg.process():
-            data = json.loads(msg.body)
-        status = str(data.get("status",200))
-        REQS.labels(request.method,status,qtype,flavour,bool(forced)).inc()
-        LAT.labels(qtype,flavour).observe((datetime.datetime.utcnow()-t0).total_seconds())
-        return Response(b64dec(data["body"]),
-                        status_code=int(status),
-                        headers={k:v for k,v in data.get("headers",{}).items()
-                                 if k.lower() not in ("content-length",)},
-                        media_type=data.get("headers",{}).get("content-type",
-                                                              "application/octet-stream"))
+        with rabbit_msg.process():
+            response_data = json.loads(rabbit_msg.body)
+
+        status_code = int(response_data.get("status", 200))
+        HTTP_REQUESTS.labels(
+            request.method,
+            str(status_code),
+            q_type,
+            flavour,
+            bool(forced_flavour),
+        ).inc()
+        HTTP_LATENCY.labels(q_type, flavour).observe(float(deadline_sec))
+
+        # The "Content-Length" header should be left to FastAPI
+        response_headers = {
+            k: v
+            for k, v in response_data.get("headers", {}).items()
+            if k.lower() != "content-length"
+        }
+
+        return Response(
+            b64dec(response_data["body"]),
+            status_code=status_code,
+            headers=response_headers,
+            media_type=response_data.get("headers", {}).get(
+                "content-type",
+                "application/octet-stream",
+            ),
+        )
+
     return app
 
 
+# ────────────────────────────────────
+# main
+# ────────────────────────────────────
 if __name__ == "__main__":
-    keeper = ScheduleKeeper()
-    loop = asyncio.get_event_loop()
-    loop.create_task(keeper.watch_cr())
-    loop.create_task(keeper.valid_until_refresher())
+    schedule_mgr = TrafficScheduleManager(TRAFFIC_SCHEDULE_NAME)
 
-    app = build_app(keeper)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    loop = asyncio.get_event_loop()
+    loop.create_task(schedule_mgr.load_once())
+    loop.create_task(schedule_mgr.watch_forever())
+    loop.create_task(schedule_mgr.expiry_guard())
+
+    uvicorn.run(create_app(schedule_mgr), host="0.0.0.0", port=8000)
