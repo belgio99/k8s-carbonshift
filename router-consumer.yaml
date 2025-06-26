@@ -37,9 +37,9 @@ spec:
           value: "TrafficSchedule"
         - name: METRICS_PORT
           value: "8001"
-        - name: SERVICE_NAME
+        - name: TARGET_SVC_NAME
           value: carbonstat
-        - name: SVC_NAMESPACE
+        - name: TARGET_SVC_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace

@@ -42,12 +42,10 @@ from common import b64dec, b64enc, log, DEFAULT_SCHEDULE
 # ──────────────────────────────────────────────
 # Configuration via environment variables
 # ──────────────────────────────────────────────
-RABBITMQ_URL: str = os.getenv(
-    "RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"
-)
-TARGET_SVC: str = os.getenv("TARGET_SVC", "http://carbonstat")
-TRAFFIC_SCHED_NAMESPACE: str = os.getenv("TS_NAMESPACE", "default")
-TRAFFIC_SCHED_NAME: str = os.getenv("TS_NAME", "current")
+RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+TARGET_SVC_NAME: str = os.getenv("TARGET_SVC_NAME", "http://carbonstat")
+TARGET_SVC_NAMESPACE: str = os.getenv("TARGET_SVC_NAMESPACE", "default")
+TRAFFIC_SCHEDULE_NAME: str = os.getenv("TS_NAME", "current")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
 FLAVOURS: tuple[str, ...] = ("high", "mid", "low")
 
@@ -110,12 +108,11 @@ class ConsumptionSwitch:
         while True:
             try:
                 stream = self._watch.stream(
-                    self._api.get_namespaced_custom_object,
+                    self._api.get_cluster_custom_object,
                     group="carbonshift.io",
                     version="v1",
-                    namespace=TRAFFIC_SCHED_NAMESPACE,
                     plural="trafficschedules",
-                    name=TRAFFIC_SCHED_NAME,
+                    name=TRAFFIC_SCHEDULE_NAME,
                     timeout_seconds=90,
                 )
                 for event in stream:
@@ -159,7 +156,7 @@ async def worker(
 
                     response = await http_client.request(
                         method=payload["method"],
-                        url=f"{TARGET_SVC}{payload['path']}",
+                        url=f"{TARGET_SVC_NAME}{payload['path']}",
                         params=payload.get("query"),
                         headers={
                             **payload.get("headers", {}),

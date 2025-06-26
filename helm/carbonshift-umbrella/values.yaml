@@ -13,6 +13,9 @@ rabbitmq:
       memory: 256Mi
   clustering:
     forceBoot: true
+  metrics:
+    enabled: true
+    
 
 # Istio component configuration
 base:

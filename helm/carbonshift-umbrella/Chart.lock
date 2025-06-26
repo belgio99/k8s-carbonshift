@@ -8,6 +8,9 @@ dependencies:
 - name: gateway
   repository: https://istio-release.storage.googleapis.com/charts
   version: 1.25.0
+- name: kube-prometheus-stack
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 75.6.0
 - name: rabbitmq
   repository: https://charts.bitnami.com/bitnami
   version: 16.0.1
@@ -20,5 +23,5 @@ dependencies:
 - name: carbonshift-operator
   repository: file://../../operator/dist/chart
   version: 0.1.0
-digest: sha256:9a790b2a1e55de3b32cdde7785826651af26b68bd3a3ad032136edada5b4204a
-generated: "2025-05-27T12:42:56.136726+02:00"
+digest: sha256:cc79d4ef56a24dfcf51636f2a7ce678c1687024feda58e5514ebcd0f3628a0b2
+generated: "2025-06-26T11:06:26.856747+02:00"

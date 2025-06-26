@@ -32,6 +32,9 @@ dependencies:
   - name: gateway # Changed from istio-ingressgateway
     version: 1.25.0
     repository: https://istio-release.storage.googleapis.com/charts
+  - name: kube-prometheus-stack
+    version: 75.6.0
+    repository: https://prometheus-community.github.io/helm-charts
 
   - name: rabbitmq
     version: 16.0.1

@@ -35,8 +35,8 @@ from common import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
 RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
 TRAFFIC_SCHEDULE_NAME: str = os.getenv("TRAFFIC_SCHEDULE_NAME", "default")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
-SERVICE_NAME: str = os.getenv("SERVICE_NAME", "unknown-svc").lower()
-SVC_NAMESPACE: str = os.getenv("SVC_NAMESPACE", "default").lower()
+TARGET_SVC_NAME: str = os.getenv("TARGET_SVC_NAME", "unknown-svc").lower()
+TARGET_SVC_NAMESPACE: str = os.getenv("TARGET_SVC_NAMESPACE", "default").lower()
 
 # ────────────────────────────────────
 # Prometheus metrics
@@ -243,9 +243,9 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
                 headers={"flavour": flavour},
                 expiration=ttl_ms,
             ),
-            routing_key=f"{SVC_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}",
+            routing_key=f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}.{q_type}.{flavour}",
         )
-        PUBLISHED_MESSAGES.labels(queue=f"{SVC_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}").inc()
+        PUBLISHED_MESSAGES.labels(queue=f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}.{q_type}.{flavour}").inc()
 
         # ─── wait for RPC response ───
         try:
