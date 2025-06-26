@@ -31,7 +31,7 @@ spec:
         image: ghcr.io/belgio99/k8s-carbonshift/buffer-service-router:latest
         imagePullPolicy: Always
         env:
-        - name: RABBIT_URL
+        - name: RABBITMQ_URL
           value: "amqp://carbonuser:supersecret@carbonshift-rabbitmq.carbonshift-system.svc.cluster.local:5672"
         - name: TRAFFIC_SCHEDULE_NAME
           value: "TrafficSchedule"
@@ -74,11 +74,28 @@ metadata:
   name: buffer-service-router-carbonstat
   namespace: carbonstat
   labels:
-    release: carbonshift # molto importante che combaci con il valore 'release' del tuo Prometheus
+    release: carbonshift
 spec:
   selector:
     matchLabels:
       app.kubernetes.io/name:      buffer-service-router
+      app.kubernetes.io/instance:  carbonshift
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rabbitmq-service-monitor
+  namespace: carbonshift-system
+  labels:
+    release: carbonshift
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name:      rabbitmq
       app.kubernetes.io/instance:  carbonshift
   endpoints:
     - port: metrics

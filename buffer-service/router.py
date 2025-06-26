@@ -220,7 +220,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         )
         flavour = forced_flavour or weighted_choice(schedule["flavorWeights"])
         deadline_sec = schedule["deadlines"].get(f"{flavour}-power", 60)
-        ttl_ms = str(int(deadline_sec * 1000))
+        expiration_ms = int(deadline_sec * 1000)
 
         # ─── build payload ───
         payload = {
@@ -242,7 +242,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
                 correlation_id=correlation_id,
                 reply_to=reply_queue.name,
                 headers={"flavour": flavour},
-                expiration=ttl_ms,
+                expiration=expiration_ms,
             ),
             routing_key=f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}.{q_type}.{flavour}",
         )
