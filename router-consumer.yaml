@@ -29,6 +29,7 @@ spec:
       containers:
       - name: buffer-service-router
         image: ghcr.io/belgio99/k8s-carbonshift/buffer-service-router:latest
+        imagePullPolicy: Always
         env:
         - name: RABBIT_URL
           value: "amqp://carbonuser:supersecret@carbonshift-rabbitmq.carbonshift-system.svc.cluster.local:5672"
@@ -38,7 +39,7 @@ spec:
           value: "8001"
         - name: SERVICE_NAME
           value: carbonstat
-        - name: POD_NAMESPACE
+        - name: SVC_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
