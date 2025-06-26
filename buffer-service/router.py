@@ -235,6 +235,13 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         channel = await get_rabbit_channel()
         reply_queue = await channel.declare_queue(exclusive=True, auto_delete=True)
 
+        response_future: "asyncio.Future[aio_pika.IncomingMessage]" = asyncio.get_running_loop().create_future()
+
+        async def _on_response(msg: aio_pika.IncomingMessage) -> None:
+            response_future.set_result(msg)
+
+        consume_tag = await reply_queue.consume(_on_response, no_ack=False)
+
         # Publish the message
         await channel.default_exchange.publish(
             aio_pika.Message(
@@ -250,7 +257,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
 
         # ─── wait for RPC response ───
         try:
-            rabbit_msg = await reply_queue.get(timeout=deadline_sec)
+            rabbit_msg = await asyncio.wait_for(response_future, timeout=deadline_sec)
         except asyncio.TimeoutError:
             HTTP_REQUESTS.labels(
                 request.method,
@@ -260,6 +267,8 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
                 bool(forced_flavour),
             ).inc()
             raise HTTPException(status_code=504, detail="Upstream timeout")
+        finally:
+            await reply_queue.cancel(consume_tag)
 
         with rabbit_msg.process():
             response_data = json.loads(rabbit_msg.body)
