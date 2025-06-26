@@ -36,7 +36,7 @@ RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/
 TRAFFIC_SCHEDULE_NAME: str = os.getenv("TRAFFIC_SCHEDULE_NAME", "default")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
 SERVICE_NAME: str = os.getenv("SERVICE_NAME", "unknown-svc").lower()
-POD_NAMESPACE: str = os.getenv("POD_NAMESPACE", "default").lower()
+SVC_NAMESPACE: str = os.getenv("SVC_NAMESPACE", "default").lower()
 
 # ────────────────────────────────────
 # Prometheus metrics
@@ -243,9 +243,9 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
                 headers={"flavour": flavour},
                 expiration=ttl_ms,
             ),
-            routing_key=f"{POD_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}",
+            routing_key=f"{SVC_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}",
         )
-        PUBLISHED_MESSAGES.labels(queue=f"{POD_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}").inc()
+        PUBLISHED_MESSAGES.labels(queue=f"{SVC_NAMESPACE}.{SERVICE_NAME}.{q_type}.{flavour}").inc()
 
         # ─── wait for RPC response ───
         try:
