@@ -1,22 +1,31 @@
 #!/usr/bin/env python3
 """
-RabbitMQ → target svc → reply
+carbonshift_consumer.py
+────────────────────────────────────────────────────────────────────────────
+Consumes the AMQP queues populated by carbonshift-router, forwards the embedded
+HTTP request to the target service and answers via AMQP (RPC style).
 
-This service
-1. Listens to RabbitMQ queues (`direct.<flavour>` and `queue.<flavour>`).
-2. For every message, performs the HTTP request described in the
-   message and sends the response back through RabbitMQ
-   (RPC style – `reply_to` + `correlation_id`).
-3. If the current TrafficSchedule CRD has `spec.consumption_enabled = 0`
-   it pauses the *buffer* queues (`queue.*`) but keeps consuming the
-   *direct* queues.
-4. Publishes Prometheus metrics on /metrics (FastAPI).
+Queue layout created by the router:
+    <namespace>.<service>.direct.<flavour>   – real-time path
+    <namespace>.<service>.queue.<flavour>    – buffer path (may be paused)
 
-All comments are deliberately left in English for consistency.
+TrafficSchedule contract (immutable):
+    • A schedule is never patched; when it “expires” (validUntil) a brand new
+      object replaces it.
+    • Field `spec.consumption_enabled` (0/1) decides whether *buffer* queues
+      must be processed.
+
+This consumer therefore:
+    1. Loads the schedule once per validity window.
+    2. If buffers are disabled, sleeps until `validUntil`.
+    3. Reloads the next schedule and repeats.
+    4. Keeps consuming real-time queues all the time.
 """
+
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 import signal
@@ -26,7 +35,9 @@ from typing import Any, Dict
 import aio_pika
 import httpx
 import uvicorn
+from dateutil import parser as date_parser
 from fastapi import FastAPI, Response
+from kubernetes import client as k8s_client, config as k8s_config
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -35,218 +46,318 @@ from prometheus_client import (
     generate_latest,
     start_http_server,
 )
-from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_watch
 
-# Local helpers (base64 helpers, logger and DEFAULT_SCHEDULE come from your project)
 from common import b64dec, b64enc, log, DEFAULT_SCHEDULE
 
-# ──────────────────────────────────────────────
-# Configuration via environment variables
-# ──────────────────────────────────────────────
-RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-TARGET_SVC_NAME: str = os.getenv("TARGET_SVC_NAME", "http://carbonstat")
-TARGET_SVC_NAMESPACE: str = os.getenv("TARGET_SVC_NAMESPACE", "default")
+# ──────────────────────────────────────────────────────────────
+# Configuration (env-vars with sane defaults)
+# ──────────────────────────────────────────────────────────────
+RABBITMQ_URL: str = os.getenv(
+    "RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"
+)
+
+TARGET_SVC_NAMESPACE: str = os.getenv("TARGET_SVC_NAMESPACE", "default").lower()
+TARGET_SVC_NAME: str = os.getenv("TARGET_SVC_NAME", "unknown-svc").lower()
+TARGET_SVC_SCHEME: str = os.getenv("TARGET_SVC_SCHEME", "http")
+TARGET_SVC_PORT: str | None = os.getenv("TARGET_SVC_PORT")          # optional
+
+# e.g. http://unknown-svc.default[:port]
+TARGET_BASE_URL: str = (
+    f"{TARGET_SVC_SCHEME}://{TARGET_SVC_NAME}.{TARGET_SVC_NAMESPACE}"
+    + (f":{TARGET_SVC_PORT}" if TARGET_SVC_PORT else "")
+)
+
 TRAFFIC_SCHEDULE_NAME: str = os.getenv("TS_NAME", "current")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
-FLAVOURS: tuple[str, ...] = ("high", "mid", "low")
 
-# ──────────────────────────────────────────────
+FLAVOURS: tuple[str, ...] = ("high", "mid", "low")
+QUEUE_PREFIX: str = f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}"
+
+# ──────────────────────────────────────────────────────────────
 # Prometheus metrics
-# ──────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 MSG_CONSUMED = Counter(
-    "consumer_messages_consumed_total",
-    "Number of messages consumed",
-    ["queue", "flavour"],
+    "consumer_messages_total",
+    "AMQP messages consumed",
+    ["queue_type", "flavour"],
 )
-PROCESSING_LAT = Histogram(
-    "consumer_processing_duration_seconds",
-    "Time spent processing a single message",
+HTTP_FORWARD_LAT = Histogram(
+    "consumer_forward_seconds",
+    "Time spent forwarding the HTTP request",
     ["flavour"],
 )
-HTTP_REQ_FORWARDED = Counter(
-    "consumer_requests_total",
-    "HTTP requests sent to target service",
+HTTP_FORWARD_COUNT = Counter(
+    "consumer_http_requests_total",
+    "Requests sent to the target service",
     ["status", "flavour"],
 )
-QUEUE_ENABLED = Gauge(
-    "consumer_queue_enabled",
-    "1 if queue.* consumption is enabled, 0 otherwise",
+BUFFER_ENABLED = Gauge(
+    "consumer_buffer_enabled",
+    "1 when queue.* consumption is enabled, 0 otherwise",
 )
 
-# ──────────────────────────────────────────────
-# FastAPI app that just exposes the metrics
-# ──────────────────────────────────────────────
-app = FastAPI(title="consumer-metrics", docs_url=None, redoc_url=None)
-
+# ──────────────────────────────────────────────────────────────
+# FastAPI – only /metrics
+# ──────────────────────────────────────────────────────────────
+app = FastAPI(title="carbonshift-consumer", docs_url=None, redoc_url=None)
 
 @app.get("/metrics")
 def metrics() -> Response:
-    """Prometheus scrape endpoint."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+# ──────────────────────────────────────────────────────────────
+# TrafficSchedule (immutable model)
+# ──────────────────────────────────────────────────────────────
+class ScheduleManager:
+    """
+    Loads the TrafficSchedule once per validity window.
+    No in-place patches are expected; a new object appears when validUntil
+    expires, so we simply reload after that timestamp.
+    """
 
-# ──────────────────────────────────────────────
-# Helper: watch TrafficSchedule.consumption_enabled
-# ──────────────────────────────────────────────
-class ConsumptionSwitch:
-    """Keeps track of the `consumption_enabled` flag in TrafficSchedule."""
+    def __init__(self, name: str) -> None:
+        self._name = name
 
-    def __init__(self) -> None:
-        # Initial state comes from the default schedule (config-map)
-        self.enabled: bool = bool(DEFAULT_SCHEDULE["consumption_enabled"])
+        # Initial spec from defaults
+        self.spec: Dict[str, Any] = DEFAULT_SCHEDULE.copy()
+        self.consumption_enabled: bool = bool(
+            self.spec.get("consumption_enabled", 1)
+        )
+        self.valid_until: dt.datetime = date_parser.isoparse(
+            self.spec["validUntil"]
+        )
+        BUFFER_ENABLED.set(int(self.consumption_enabled))
 
-        # Load Kubernetes config (in-cluster or from ~/.kube/config)
+        # K8s client (works in-cluster and off-cluster)
         try:
             k8s_config.load_incluster_config()
         except Exception:
             k8s_config.load_kube_config()
-
         self._api = k8s_client.CustomObjectsApi()
-        self._watch = k8s_watch.Watch()
 
-    async def run(self) -> None:
-        """Watch loop – keeps the .enabled property up-to-date."""
+    # ── helpers ─────────────────────────────────────────────
+    def seconds_to_expiry(self) -> float:
+        """Return non-negative seconds until current schedule expires."""
+        return max(
+            (self.valid_until - dt.datetime.utcnow()).total_seconds(), 0.0
+        )
+
+    async def _load_once(self) -> None:
+        """Fetch the schedule from the API server (blocking call off-thread)."""
+        obj = await asyncio.to_thread(
+            self._api.get_cluster_custom_object,
+            group="scheduling.carbonshift.io",
+            version="v1",
+            plural="trafficschedules",
+            name=self._name,
+        )
+        self.spec = obj["spec"]
+
+        # Extract the two fields the consumer cares about
+        self.consumption_enabled = bool(
+            self.spec.get("consumption_enabled", 1)
+        )
+        self.valid_until = date_parser.isoparse(self.spec["validUntil"])
+        BUFFER_ENABLED.set(int(self.consumption_enabled))
+
+        log.info(
+            "TrafficSchedule loaded – enabled=%s  validUntil=%s",
+            self.consumption_enabled,
+            self.valid_until.isoformat(),
+        )
+
+    async def refresh_schedule(self) -> None:
+        """
+        Background loop:
+          • load schedule
+          • sleep until it expires
+          • repeat
+        """
         while True:
             try:
-                stream = self._watch.stream(
-                    self._api.get_cluster_custom_object,
-                    group="carbonshift.io",
-                    version="v1",
-                    plural="trafficschedules",
-                    name=TRAFFIC_SCHEDULE_NAME,
-                    timeout_seconds=90,
-                )
-                for event in stream:
-                    spec = event["object"]["spec"]
-                    self.enabled = bool(spec.get("consumption_enabled", 1))
-                    QUEUE_ENABLED.set(int(self.enabled))
-            except Exception as exc:
-                log.error("TrafficSchedule watch error: %s", exc)
-                await asyncio.sleep(5)
-
-
-# ──────────────────────────────────────────────
-# Worker coroutine: consumes a single AMQP queue
-# ──────────────────────────────────────────────
-async def worker(
-    amqp_channel: aio_pika.Channel,
-    queue_name: str,
-    switch: ConsumptionSwitch,
-    http_client: httpx.AsyncClient,
-) -> None:
-    """Consume an AMQP queue and forward messages to target service."""
-    queue = await amqp_channel.declare_queue(queue_name, durable=True)
-
-    async with queue.iterator() as queue_iter:
-        async for message in queue_iter:
-            flavour: str = message.headers.get("flavour", "mid")
-
-            # If it's a buffer queue (queue.*) and disabled, immediately requeue
-            if queue_name.startswith("queue.") and not switch.enabled:
-                await asyncio.sleep(1)  # tiny back-off
-                await message.nack(requeue=True)
+                await self._load_once()
+            except Exception as exc:            # noqa: BLE001
+                log.error("Schedule load error: %s", exc)
+                # fallback: retry quickly
+                await asyncio.sleep(10)
                 continue
 
-            start_ts = time.perf_counter()
-            async with message.process(requeue=True):
-                # ----------------------------------------------------------------
-                # 1. Perform the HTTP request described in the message
-                # ----------------------------------------------------------------
-                try:
-                    payload: Dict[str, Any] = json.loads(message.body)
+            await asyncio.sleep(self.seconds_to_expiry() + 1)
 
-                    response = await http_client.request(
-                        method=payload["method"],
-                        url=f"{TARGET_SVC_NAME}{payload['path']}",
-                        params=payload.get("query"),
-                        headers={
-                            **payload.get("headers", {}),
-                            "X-Carbonshift": flavour,
-                        },
-                        content=b64dec(payload["body"]),
-                    )
+# ──────────────────────────────────────────────────────────────
+# Core helper – forward HTTP + reply over AMQP
+# ──────────────────────────────────────────────────────────────
+async def forward_and_reply(
+    message: aio_pika.IncomingMessage,
+    flavour: str,
+    channel: aio_pika.Channel,
+    http_client: httpx.AsyncClient,
+) -> tuple[int, float]:
+    """
+    Execute the HTTP request embedded in `message` and publish the response
+    on `message.reply_to`. Returns (status_code, elapsed_seconds).
+    """
+    start_ts = time.perf_counter()
 
-                    status_code = response.status_code
-                    response_body = response.content
-                    response_headers = dict(response.headers)
+    async with message.process(requeue=True):          # auto-nack on error
+        try:
+            payload: Dict[str, Any] = json.loads(message.body)
 
-                except Exception as exc:
-                    # Network or validation error → synthesize 500 response
-                    status_code = 500
-                    response_body = json.dumps({"error": str(exc)}).encode()
-                    response_headers = {"content-type": "application/json"}
+            response = await http_client.request(
+                method=payload["method"],
+                url=f"{TARGET_BASE_URL}{payload['path']}",
+                params=payload.get("query"),         # router sends str "a=1&b=2"
+                headers={
+                    **payload.get("headers", {}),
+                    "X-Carbonshift": flavour,
+                },
+                content=b64dec(payload["body"]),
+            )
 
-                # ----------------------------------------------------------------
-                # 2. Send the reply back to the requester via AMQP
-                # ----------------------------------------------------------------
-                await amqp_channel.default_exchange.publish(
-                    aio_pika.Message(
-                        body=json.dumps(
-                            {
-                                "status": status_code,
-                                "headers": response_headers,
-                                "body": b64enc(response_body),
-                            }
-                        ).encode(),
-                        correlation_id=message.correlation_id,
-                    ),
-                    routing_key=message.reply_to,
+            status_code = response.status_code
+            response_headers = dict(response.headers)
+            response_body = response.content
+
+        except Exception as exc:                      # network / decode failure
+            status_code = 500
+            response_headers = {"content-type": "application/json"}
+            response_body = json.dumps({"error": str(exc)}).encode()
+
+        # Publish RPC reply
+        await channel.default_exchange.publish(
+            aio_pika.Message(
+                json.dumps(
+                    {
+                        "status": status_code,
+                        "headers": response_headers,
+                        "body": b64enc(response_body),
+                    }
+                ).encode(),
+                correlation_id=message.correlation_id,
+            ),
+            routing_key=message.reply_to,
+        )
+
+    elapsed = time.perf_counter() - start_ts
+    return status_code, elapsed
+
+# ──────────────────────────────────────────────────────────────
+# Worker – real-time path (direct.*)
+# ──────────────────────────────────────────────────────────────
+async def consume_direct_queue(
+    channel: aio_pika.Channel,
+    queue_name: str,
+    http_client: httpx.AsyncClient,
+) -> None:
+    """
+    Consume <prefix>.direct.<flavour> – always active.
+    """
+    queue = await channel.declare_queue(queue_name, durable=True)
+
+    async with queue.iterator() as iterator:
+        async for message in iterator:
+            flavour = message.headers.get("flavour", "mid")
+            status, dt_sec = await forward_and_reply(
+                message, flavour, channel, http_client
+            )
+
+            MSG_CONSUMED.labels("direct", flavour).inc()
+            HTTP_FORWARD_COUNT.labels(str(status), flavour).inc()
+            HTTP_FORWARD_LAT.labels(flavour).observe(dt_sec)
+
+# ──────────────────────────────────────────────────────────────
+# Worker – buffer path (queue.*)  pausable via TrafficSchedule
+# ──────────────────────────────────────────────────────────────
+async def consume_buffer_queue(
+    channel: aio_pika.Channel,
+    queue_name: str,
+    schedule: ScheduleManager,
+    http_client: httpx.AsyncClient,
+) -> None:
+    """
+    Consume <prefix>.queue.<flavour>.
+    If buffers are disabled, sleep until the current schedule expires.
+    """
+    while True:
+        # Pause wholesale while disabled
+        if not schedule.consumption_enabled:
+            sleep_for = schedule.seconds_to_expiry() + 1
+            log.info("Buffers disabled – sleeping %.0fs", sleep_for)
+            await asyncio.sleep(sleep_for)
+            # schedule.refresh_forever() will reload by then
+            continue
+
+        # Buffer consumption is enabled → declare consumer
+        queue = await channel.declare_queue(queue_name, durable=True)
+        async with queue.iterator() as iterator:
+            async for message in iterator:
+                # If flag flips mid-stream → cancel and restart outer loop
+                if not schedule.consumption_enabled:
+                    await iterator.close()
+                    break
+
+                flavour = message.headers.get("flavour", "mid")
+                status, dt_sec = await forward_and_reply(
+                    message, flavour, channel, http_client
                 )
 
-            # --------------------------------------------------------------------
-            # 3. Update metrics
-            # --------------------------------------------------------------------
-            MSG_CONSUMED.labels(queue_name, flavour).inc()
-            PROCESSING_LAT.labels(flavour).observe(time.perf_counter() - start_ts)
-            HTTP_REQ_FORWARDED.labels(str(status_code), flavour).inc()
+                MSG_CONSUMED.labels("queue", flavour).inc()
+                HTTP_FORWARD_COUNT.labels(str(status), flavour).inc()
+                HTTP_FORWARD_LAT.labels(flavour).observe(dt_sec)
 
-
-# ──────────────────────────────────────────────
-# Main entry-point
-# ──────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# Main bootstrap
+# ──────────────────────────────────────────────────────────────
 async def main() -> None:
     # Start the Prometheus metrics server
     start_http_server(METRICS_PORT)
-    switch = ConsumptionSwitch()
-    loop = asyncio.get_event_loop()
+    # TrafficSchedule manager (background task)
+    schedule = ScheduleManager(TRAFFIC_SCHEDULE_NAME)
+    asyncio.create_task(schedule.refresh_schedule())
 
-    # Background: watch TrafficSchedule
-    loop.create_task(switch.run())
-
-    # AMQP connection + channel
-    amqp_connection = await aio_pika.connect_robust(RABBITMQ_URL)
-    amqp_channel = await amqp_connection.channel()
-    await amqp_channel.set_qos(prefetch_count=10)
+    # AMQP connection / channel
+    connection = await aio_pika.connect_robust(RABBITMQ_URL)
+    channel = await connection.channel()
+    await channel.set_qos(prefetch_count=20)
 
     # Shared HTTP client
     http_client = httpx.AsyncClient()
 
-    # Spawn one worker per queue flavour (direct.* and queue.*)
+    # Spawn one worker per (queue type, flavour)
     for flavour in FLAVOURS:
-        loop.create_task(
-            worker(amqp_channel, f"direct.{flavour}", switch, http_client)
+        # Realtime path
+        asyncio.create_task(
+            consume_direct_queue(
+                channel, f"{QUEUE_PREFIX}.direct.{flavour}", http_client
+            )
         )
-        loop.create_task(
-            worker(amqp_channel, f"queue.{flavour}", switch, http_client)
+        # Buffer path
+        asyncio.create_task(
+            consume_buffer_queue(
+                channel,
+                f"{QUEUE_PREFIX}.queue.{flavour}",
+                schedule,
+                http_client,
+            )
         )
 
-    # Expose /metrics
-    loop.create_task(
+    asyncio.create_task(
         uvicorn.run(
             app,
             host="0.0.0.0",
-            port=METRICS_PORT,
+            port=8000,
             lifespan="off",
             log_level="info",
         )
     )
 
-    # Graceful shutdown on SIGINT / SIGTERM
+    # Graceful shutdown
+    loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(amqp_connection.close()))
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(connection.close()))
 
-    await amqp_connection.closing  # wait until connection is fully closed
+    await connection.closing        # suspend until connection is closed
 
-
-if __name__ == "__main__":  # pragma: no cover
+# ──────────────────────────────────────────────────────────────
+if __name__ == "__main__":          # pragma: no cover
     asyncio.run(main())
