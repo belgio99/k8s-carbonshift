@@ -1,3 +1,22 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trafficschedule-viewer-sa
+  namespace: carbonstat
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: trafficschedule-viewer-binding
+subjects:
+- kind: ServiceAccount
+  name: trafficschedule-viewer-sa
+  namespace: carbonstat
+roleRef:
+  kind: ClusterRole
+  name: trafficschedule-viewer-role
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,6 +45,7 @@ spec:
         app.kubernetes.io/managed-by:  carbonshift-operator
         carbonshift/parent-service:    carbonstat
     spec:
+      serviceAccountName: trafficschedule-viewer-sa
       containers:
       - name: buffer-service-router
         image: ghcr.io/belgio99/k8s-carbonshift/buffer-service-router:latest
@@ -96,6 +116,100 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name:      rabbitmq
+      app.kubernetes.io/instance:  carbonshift
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buffer-service-consumer-carbonstat #buffer-service-router- carbonstat 
+  namespace: carbonstat
+  labels:
+    # Recommended labels
+    app.kubernetes.io/name:        buffer-service-consumer
+    app.kubernetes.io/instance:    carbonshift
+    app.kubernetes.io/component:   consumer
+    app.kubernetes.io/part-of:     carbonshift
+    carbonshift/parent-service:    carbonstat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name:        buffer-service-consumer
+      app.kubernetes.io/instance:    carbonshift
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name:        buffer-service-consumer
+        app.kubernetes.io/instance:    carbonshift
+        app.kubernetes.io/component:   consumer
+        app.kubernetes.io/part-of:     carbonshift
+        app.kubernetes.io/managed-by:  carbonshift-operator
+        carbonshift/parent-service:    carbonstat
+    spec:
+      serviceAccountName: trafficschedule-viewer-sa
+      containers:
+      - name: buffer-service-consumer
+        image: ghcr.io/belgio99/k8s-carbonshift/buffer-service-consumer:latest
+        imagePullPolicy: Always
+        env:
+        - name: RABBITMQ_URL
+          value: "amqp://carbonuser:supersecret@carbonshift-rabbitmq.carbonshift-system.svc.cluster.local:5672"
+        - name: TRAFFIC_SCHEDULE_NAME
+          value: "TrafficSchedule"
+        - name: METRICS_PORT
+          value: "8001"
+        - name: TARGET_SVC_NAME
+          value: carbonstat
+        - name: TARGET_SVC_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: TARGET_SVC_SCHEME
+          value: http
+        - name: TARGET_SVC_PORT
+          value: "8000"
+        - name: TS_NAME
+          value: "traffic-schedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buffer-service-consumer-carbonstat #buffer-service-router- carbonstat 
+  namespace: carbonstat
+  labels:
+    app.kubernetes.io/name:        buffer-service-consumer
+    app.kubernetes.io/instance:    carbonshift
+    app.kubernetes.io/component:   consumer
+    app.kubernetes.io/part-of:     carbonshift
+    carbonshift/parent-service:    carbonstat
+spec:
+  selector:
+    app.kubernetes.io/name:        buffer-service-consumer
+    app.kubernetes.io/instance:    carbonshift
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  - name: metrics
+    port: 8001
+    targetPort: 8001
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: buffer-service-consumer-carbonstat
+  namespace: carbonstat
+  labels:
+    release: carbonshift
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name:      buffer-service-consumer
       app.kubernetes.io/instance:  carbonshift
   endpoints:
     - port: metrics

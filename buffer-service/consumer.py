@@ -67,7 +67,7 @@ TARGET_BASE_URL: str = (
     + (f":{TARGET_SVC_PORT}" if TARGET_SVC_PORT else "")
 )
 
-TRAFFIC_SCHEDULE_NAME: str = os.getenv("TS_NAME", "current")
+TRAFFIC_SCHEDULE_NAME: str = os.getenv("TS_NAME", "traffic-schedule")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
 
 FLAVOURS: tuple[str, ...] = ("high", "mid", "low")
@@ -341,15 +341,15 @@ async def main() -> None:
             )
         )
 
-    asyncio.create_task(
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=8000,
-            lifespan="off",
-            log_level="info",
-        )
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        lifespan="off",
+        log_level="info",
     )
+    server = uvicorn.Server(config)
+    asyncio.create_task(server.serve())
 
     # Graceful shutdown
     loop = asyncio.get_running_loop()
