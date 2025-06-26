@@ -67,3 +67,20 @@ spec:
     port: 8001
     targetPort: 8001
   type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: buffer-service-router-carbonstat
+  namespace: carbonstat
+  labels:
+    release: carbonshift # molto importante che combaci con il valore 'release' del tuo Prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name:      buffer-service-router
+      app.kubernetes.io/instance:  carbonshift
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics

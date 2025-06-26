@@ -25,6 +25,7 @@ from prometheus_client import (
     Gauge,
     Histogram,
     generate_latest,
+    start_http_server,
 )
 
 from common import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
@@ -297,6 +298,8 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
 # main
 # ────────────────────────────────────
 if __name__ == "__main__":
+    # Start the Prometheus metrics server
+    start_http_server(METRICS_PORT)
     schedule_mgr = TrafficScheduleManager(TRAFFIC_SCHEDULE_NAME)
 
     loop = asyncio.get_event_loop()

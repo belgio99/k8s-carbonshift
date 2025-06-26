@@ -49,3 +49,8 @@ buffer-service:
 carbonshift-operator:
   podAnnotations:
     sidecar.istio.io/inject: "false"
+
+kube-prometheus-stack:
+  prometheus-node-exporter:
+    hostRootFsMount:
+      enabled: false

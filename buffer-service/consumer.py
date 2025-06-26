@@ -33,6 +33,7 @@ from prometheus_client import (
     Gauge,
     Histogram,
     generate_latest,
+    start_http_server,
 )
 from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_watch
 
@@ -204,6 +205,8 @@ async def worker(
 # Main entry-point
 # ──────────────────────────────────────────────
 async def main() -> None:
+    # Start the Prometheus metrics server
+    start_http_server(METRICS_PORT)
     switch = ConsumptionSwitch()
     loop = asyncio.get_event_loop()
 
