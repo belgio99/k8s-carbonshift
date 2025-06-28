@@ -20,7 +20,7 @@ def get_decision():
       "flavorWeights": {
         "low-power": 50,
         "mid-power": 30,
-        "high-power": 0
+        "high-power": 20
       },
       "deadlines": {
         "low-power": 600,
