@@ -86,3 +86,23 @@ class TrafficScheduleManager:
                 sleep_s = 60
             await asyncio.sleep(sleep_s + 1)
             await self.load_once()
+    
+    @property
+    def consumption_enabled(self) -> bool:
+        """
+        True → consumare le queue.*,
+        False → il consumer deve dormire.
+        """
+        return bool(self._current.get("consumption_enabled", 1))
+
+    def seconds_to_expiry(self) -> float:
+        """
+        Ritorna quanti secondi mancano a validUntil (>=0),
+        0 se il campo manca o non è parse-able.
+        """
+        valid_until = self._current.get("validUntil")
+        try:
+            expiry_dt = date_parser.isoparse(valid_until)
+            return max((expiry_dt - dt.datetime.utcnow()).total_seconds(), 0)
+        except Exception:
+            return 0.0

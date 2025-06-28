@@ -290,7 +290,8 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(connection.close()))
 
-    await connection.wait_closed()
+    await connection.close()
+    await http_client.aclose()
 
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":          # pragma: no cover
