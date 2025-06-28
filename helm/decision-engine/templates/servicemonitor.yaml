@@ -9,8 +9,9 @@ metadata:
 spec:
    selector:
       matchLabels:
-       {{- include "decision-engine.selectorLabels" . | nindent 6 }}
+         app.kubernetes.io/instance: carbonshift
+         app.kubernetes.io/name: decision-engine
    endpoints:
       - port: metrics
         interval: 15s
-        path: /
+        path: /metrics

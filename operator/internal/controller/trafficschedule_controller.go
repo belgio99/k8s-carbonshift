@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"sort"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,6 +40,8 @@ type TrafficScheduleReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
+
+const pollInterval = 1 * time.Minute
 
 // +kubebuilder:rbac:groups=scheduling.carbonshift.io,resources=trafficschedules,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=scheduling.carbonshift.io,resources=trafficschedules/status,verbs=get;update;patch
@@ -103,6 +106,10 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		status.ValidUntil = metav1.NewTime(t)
 	}
 
+	sort.Slice(status.FlavourRules, func(i, j int) bool {
+    return status.FlavourRules[i].FlavourName < status.FlavourRules[j].FlavourName
+	})
+
 	// 4) Overwrite old status with the new one
    statusChanged := !reflect.DeepEqual(existing.Status, status)
 	if statusChanged {
@@ -112,17 +119,21 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
       }
    }
-
-// 5) Calculate the next reconcile time
-	if !status.ValidUntil.Time.IsZero() {
-      delay := time.Until(status.ValidUntil.Time)
-		if delay < 0 {
-         delay = 0
-      }
-      ctrl.Log.Info("TrafficSchedule reconcile complete. Next reconcile time: ", "nextReconcileTime", status.ValidUntil.Time)
-		return ctrl.Result{RequeueAfter: delay}, nil
+	next := pollInterval
+   if !status.ValidUntil.IsZero() {
+       until := time.Until(status.ValidUntil.Time)
+       if until < 0 {
+           until = 0
+       }
+       if until < next { 
+           next = until
+       }
    }
-	return ctrl.Result{}, nil
+
+   ctrl.Log.Info("TrafficSchedule reconcile complete",
+       "nextReconcileIn", next)
+
+   return ctrl.Result{RequeueAfter: next}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
