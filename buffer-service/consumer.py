@@ -47,7 +47,7 @@ from prometheus_client import (
     start_http_server,
 )
 
-from common.utils import b64dec, b64enc, log, DEFAULT_SCHEDULE
+from common.utils import b64dec, b64enc, log, DEFAULT_SCHEDULE, debug
 from common.schedule import TrafficScheduleManager
 
 # ─────────────────────────────────────────────────────────────
@@ -120,11 +120,13 @@ async def forward_and_reply(
     on `message.reply_to`. Returns (status_code, elapsed_seconds).
     """
     start_ts = time.perf_counter()
+    debug(f"forward_and_reply start: correlation_id={message.correlation_id} flavour={flavour}")
 
     async with message.process(requeue=True):          # auto-nack on error
         try:
             payload: Dict[str, Any] = json.loads(message.body)
 
+            debug(f"Payload: method={payload.get('method')} path={payload.get('path')} headers={payload.get('headers')}")
             response = await http_client.request(
                 method=payload["method"],
                 url=f"{TARGET_BASE_URL}{payload['path']}",
@@ -136,6 +138,7 @@ async def forward_and_reply(
                 content=b64dec(payload["body"]),
             )
 
+            debug(f"HTTP response received: status_code={response.status_code}")
             status_code = response.status_code
             response_headers = dict(response.headers)
             response_body = response.content
@@ -161,6 +164,7 @@ async def forward_and_reply(
         )
 
     elapsed = time.perf_counter() - start_ts
+    debug(f"forward_and_reply end: correlation_id={message.correlation_id} elapsed={elapsed:.3f}s")
     return status_code, elapsed
 
 # ──────────────────────────────────────────────────────────────
@@ -262,7 +266,7 @@ async def main() -> None:
             consume_buffer_queue(
                 channel,
                 f"{QUEUE_PREFIX}.queue.{flavour}",
-                schedule,
+                schedule_mgr,
                 http_client,
             )
         )

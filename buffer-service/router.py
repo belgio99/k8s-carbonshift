@@ -28,7 +28,7 @@ from prometheus_client import (
     start_http_server,
 )
 
-from common.utils import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
+from common.utils import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice, debug
 from common.schedule import TrafficScheduleManager
 
 RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
@@ -109,6 +109,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         Waits for the RPC response and forwards it to the HTTP client.
         """
 
+        debug(f"Proxy start: method={request.method} path=/{full_path}")
         schedule = await schedule_manager.snapshot()
         headers: Dict[str, str] = dict(request.headers)
 
@@ -124,6 +125,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
             )
         )
         flavour = forced_flavour or weighted_choice(schedule["flavorWeights"])
+        debug(f"Selected routing: q_type={q_type}, flavour={flavour}, forced={bool(forced_flavour)}")
         deadline_sec = schedule["deadlines"].get(f"{flavour}-power", 60)
         expiration_ms = int(deadline_sec * 1000)
 

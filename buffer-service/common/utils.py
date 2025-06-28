@@ -27,3 +27,11 @@ DEFAULT_SCHEDULE = {
     "consumption_enabled": 1,
     "validUntil": "2099-12-31T23:59:59Z",
 }
+
+# Debug mode flag and function
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
+def debug(msg: str) -> None:
+    """Print debug message if DEBUG env var is true."""
+    if DEBUG:
+        print(f"[DEBUG] {msg}")
