@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	flavours        = []string{"high", "mid", "low"}
+	flavours        = []string{"high-power", "mid-power", "low-power"}
 	queueSvcSuffix = "-queue" // nome Service della coda <svc>-queue
 )
 
@@ -83,7 +83,7 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	trafficschedule := tsList.Items[0].Status
 
 	// 3. Get the weights for flavours and direct/queue
-	weightsFlavour := map[string]int{"high": 0, "mid": 0, "low": 0}
+	weightsFlavour := map[string]int{"high-power": 0, "mid-power": 0, "low-power": 0}
 	for _, fr := range trafficschedule.FlavourRules {
 		weightsFlavour[fr.FlavourName] = fr.Weight
 		log.Info("Flavour weights", "flavour", fr.FlavourName, "weight", fr.Weight)
@@ -99,9 +99,7 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.ensureDR(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.ensureEntryVS(ctx, &svc, directW, queueW); err != nil {
-		return ctrl.Result{}, err
-	}
+
 	if err := r.ensureFlavourVS(ctx, &svc, directW, weightsFlavour); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -182,9 +180,9 @@ func (r *FlavourRouterReconciler) ensureDR(ctx context.Context, svc *corev1.Serv
 		Spec: networkingapi.DestinationRule{
 			Host: svc.Name,
 			Subsets: []*networkingapi.Subset{
-				{Name: "high", Labels: map[string]string{carbonLabel: "high"}},
-				{Name: "mid", Labels: map[string]string{carbonLabel: "mid"}},
-				{Name: "low", Labels: map[string]string{carbonLabel: "low"}},
+				{Name: "high-power", Labels: map[string]string{carbonLabel: "high-power"}},
+				{Name: "mid-power", Labels: map[string]string{carbonLabel: "mid-power"}},
+				{Name: "low-power", Labels: map[string]string{carbonLabel: "low-power"}},
 			},
 		},
 	}
@@ -266,9 +264,9 @@ func (r *FlavourRouterReconciler) ensureEntryVS(ctx context.Context, svc *corev1
 }
 
 func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *corev1.Service, directW int, wFl map[string]int) error {
-	name := fmt.Sprintf("%s-flavour-vs", svc.Name)
+	name := fmt.Sprintf("%s", svc.Name)
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
-    sourceHost := fmt.Sprintf("%s-flavour-vs.%s.svc.cluster.local", svc.Name, svc.Namespace)
+   sourceHost := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
     
 	ctrl.LoggerFrom(ctx).Info("Ensuring Flavour VirtualService for service", "service", svc.Name)
 
@@ -277,7 +275,7 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 	lowW := int32(wFl["low-power"])
 
 	matches := []struct{ val, subset string }{
-		{"high", "high"}, {"mid", "mid"}, {"low", "low"},
+		{"high-power", "high-power"}, {"mid-power", "mid-power"}, {"low-power", "low-power"},
 	}
 
 	var httpRoutes []*networkingapi.HTTPRoute
@@ -299,9 +297,9 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 	// "Normal" traffic routing to the flavours
 	httpRoutes = append(httpRoutes, &networkingapi.HTTPRoute{
 		Route: []*networkingapi.HTTPRouteDestination{
-			{Destination: &networkingapi.Destination{Host: host, Subset: "high"}, Weight: highW},
-			{Destination: &networkingapi.Destination{Host: host, Subset: "mid"}, Weight: midW},
-			{Destination: &networkingapi.Destination{Host: host, Subset: "low"}, Weight: lowW},
+			{Destination: &networkingapi.Destination{Host: host, Subset: "high-power"}, Weight: highW},
+			{Destination: &networkingapi.Destination{Host: host, Subset: "mid-power"}, Weight: midW},
+			{Destination: &networkingapi.Destination{Host: host, Subset: "low-power"}, Weight: lowW},
 		},
 	})
 

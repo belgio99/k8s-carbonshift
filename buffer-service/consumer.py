@@ -132,7 +132,7 @@ async def forward_and_reply(
                 params=payload.get("query"),         # router sends str "a=1&b=2"
                 headers={
                     **payload.get("headers", {}),
-                    "X-Carbonshift": flavour,
+                    "x-carbonshift": flavour,
                 },
                 content=b64dec(payload["body"]),
             )

@@ -112,8 +112,8 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         headers: Dict[str, str] = dict(request.headers)
 
         # ─── select strategy / flavour ───
-        urgent = headers.get("X-Urgent", "false").lower() == "true"
-        forced_flavour = headers.get("X-Carbonshift")
+        urgent = headers.get("x-urgent", "false").lower() == "true"
+        forced_flavour = headers.get("x-carbonshift")
 
         flavour_weights   = {r["flavourName"]: r["weight"]
                          for r in schedule.get("flavourRules", [])}

@@ -21,7 +21,7 @@ class CarbonAwareStrategies(Enum):
 # Carbon-aware context
 class Context:
     def __init__(self):
-        flavour = environ.get("FLAVOUR", "high")  # Default to HighPower if not set
+        flavour = environ.get("FLAVOUR", "high-power")  # Default to HighPower if not set
         if flavour not in CarbonAwareStrategies.__members__:
             raise ValueError(
                 f"Flavour '{flavour}' is not valid. Use: {list(CarbonAwareStrategies.__members__.keys())}"
