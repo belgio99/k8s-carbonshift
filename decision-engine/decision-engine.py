@@ -27,6 +27,7 @@ def get_decision():
         "mid-power": 120,
         "high-power": 40
       },
+      "consumptionEnabled": True,
       "validUntil": valid_until_iso
     }
     return jsonify(decision)
