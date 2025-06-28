@@ -31,9 +31,6 @@ from prometheus_client import (
 from common.utils import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
 from common.schedule import TrafficScheduleManager
 
-# ────────────────────────────────────
-# Config / env
-# ────────────────────────────────────
 RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
 TS_NAME: str = os.getenv("TS_NAME", "traffic-schedule")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
