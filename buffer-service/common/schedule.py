@@ -90,15 +90,14 @@ class TrafficScheduleManager:
     @property
     def consumption_enabled(self) -> bool:
         """
-        True → consumare le queue.*,
-        False → il consumer deve dormire.
+        True → consume queue.*,
+        False → consumer sleeps
         """
         return bool(self._current.get("consumption_enabled", 1))
 
     def seconds_to_expiry(self) -> float:
         """
-        Ritorna quanti secondi mancano a validUntil (>=0),
-        0 se il campo manca o non è parse-able.
+        Returns the number of seconds until the schedule expires.
         """
         valid_until = self._current.get("validUntil")
         try:
@@ -106,3 +105,9 @@ class TrafficScheduleManager:
             return max((expiry_dt - dt.datetime.utcnow()).total_seconds(), 0)
         except Exception:
             return 0.0
+        
+    async def close(self) -> None:
+        """
+        Closes the Kubernetes API client connection.
+        """
+        await self._api.api_client.close()
