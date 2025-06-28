@@ -17,7 +17,7 @@ def get_decision():
     decision = {
       "directWeight": 80,
       "queueWeight": 20,
-      "flavorWeights": {
+      "flavourWeights": {
         "low-power": 50,
         "mid-power": 30,
         "high-power": 20

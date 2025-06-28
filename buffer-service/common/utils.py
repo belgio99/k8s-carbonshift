@@ -23,7 +23,7 @@ DEFAULT_SCHEDULE = {
     "deadlines": {"high-power": 30, "mid-power": 120, "low-power": 600},
     "directWeight": 80,
     "queueWeight": 20,
-    "flavorWeights": {"high": 10, "mid": 20, "low": 70},
+    "flavourWeights": {"high": 10, "mid": 20, "low": 70},
     "consumption_enabled": 1,
     "validUntil": "2099-12-31T23:59:59Z",
 }

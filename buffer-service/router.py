@@ -116,6 +116,11 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         urgent = headers.get("X-Urgent", "false").lower() == "true"
         forced_flavour = headers.get("X-Carbonshift")
 
+        flavour_weights   = {r["flavourName"]: r["weight"]
+                         for r in schedule.get("flavourRules", [])}
+        flavour_deadlines = {r["flavourName"]: r.get("deadlineSec", 60)
+                         for r in schedule.get("flavourRules", [])}
+
         q_type = (
             "direct"
             if urgent
@@ -123,7 +128,8 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
                 {"direct": schedule["directWeight"], "queue": schedule["queueWeight"]}
             )
         )
-        flavour = forced_flavour or weighted_choice(schedule["flavorWeights"])
+
+        flavour = forced_flavour or weighted_choice(schedule["flavourRules"])
         debug(f"Selected routing: q_type={q_type}, flavour={flavour}, forced={bool(forced_flavour)}")
         deadline_sec = schedule["deadlines"].get(f"{flavour}-power", 60)
         expiration_ms = int(deadline_sec * 1000)
@@ -148,10 +154,6 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
 
         consume_tag = await reply_queue.consume(_on_response, no_ack=False)
 
-        def on_return(msg):
-            debug("NO_ROUTE for " + msg.routing_key)
-
-        channel.add_on_return_callback(on_return)
 
         # Publish the message
         await channel.default_exchange.publish(

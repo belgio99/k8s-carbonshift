@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	flavors        = []string{"high", "mid", "low"}
+	flavours        = []string{"high", "mid", "low"}
 	queueSvcSuffix = "-queue" // nome Service della coda <svc>-queue
 )
 
@@ -84,9 +84,9 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// 3. Get the weights for flavours and direct/queue
 	weightsFlavour := map[string]int{"high": 0, "mid": 0, "low": 0}
-	for _, fr := range trafficschedule.FlavorRules {
-		weightsFlavour[fr.FlavorName] = fr.Weight
-		log.Info("Flavor weights", "flavor", fr.FlavorName, "weight", fr.Weight)
+	for _, fr := range trafficschedule.FlavourRules {
+		weightsFlavour[fr.FlavourName] = fr.Weight
+		log.Info("Flavour weights", "flavour", fr.FlavourName, "weight", fr.Weight)
 	}
 	directW := trafficschedule.DirectWeight
 	queueW := trafficschedule.QueueWeight
@@ -334,7 +334,7 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 
 /*
 func (r *FlavourRouterReconciler) handleScaling(ctx context.Context, ns string, weights map[string]int) error {
-    for _, fl := range flavors {
+    for _, fl := range flavours {
         var depList appsv1.DeploymentList
         if err := r.List(ctx, &depList,
             client.InNamespace(ns),

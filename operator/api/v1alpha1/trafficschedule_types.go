@@ -30,10 +30,10 @@ type TrafficScheduleSpec struct {
 
 }
 
-// FlavorRule defines the rules for a specific flavor.
-type FlavorRule struct {
-	FlavorName string `json:"flavorName"`
-	// Weight: how much of the traffic should be scheduled to this flavor (percentage)
+// FlavourRule defines the rules for a specific flavour.
+type FlavourRule struct {
+	FlavourName string `json:"flavourName"`
+	// Weight: how much of the traffic should be scheduled to this flavour (percentage)
 	Weight int `json:"weight"`
 	// DeadlineSec: max delay in seconds
 	DeadlineSec int `json:"deadlineSec"`
@@ -44,7 +44,7 @@ type TrafficScheduleStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	FlavorRules []FlavorRule `json:"flavorRules"`
+	FlavourRules []FlavourRule `json:"flavourRules"`
 	// DirectWeight: how much of the traffic should be scheduled directly to the application (percentage)
 	DirectWeight int `json:"directWeight"`
 	// QueueWeight: how much of the traffic should be scheduled to the queue (percentage)

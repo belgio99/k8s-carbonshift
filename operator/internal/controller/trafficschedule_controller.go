@@ -75,7 +75,7 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	var remote struct {
 		DirectWeight  int            `json:"directWeight"`
 		QueueWeight   int            `json:"queueWeight"`
-		FlavorWeights map[string]int `json:"flavorWeights"`
+		FlavourWeights map[string]int `json:"flavourWeights"`
 		Deadlines     map[string]int `json:"deadlines"`
 		ConsumptionEnabled bool `json:"consumptionEnabled"`
 		ValidUntilISO string         `json:"validUntil"`
@@ -91,10 +91,10 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		QueueWeight:  int(remote.QueueWeight),
 		ConsumptionEnabled: remote.ConsumptionEnabled,
 	}
-	for flavor, w := range remote.FlavorWeights {
-		dl := remote.Deadlines[flavor]
-		status.FlavorRules = append(status.FlavorRules, schedulingv1alpha1.FlavorRule{
-			FlavorName:  flavor,
+	for flavour, w := range remote.FlavourWeights {
+		dl := remote.Deadlines[flavour]
+		status.FlavourRules = append(status.FlavourRules, schedulingv1alpha1.FlavourRule{
+			FlavourName:  flavour,
 			Weight:      int(w),
 			DeadlineSec: int(dl),
 		})

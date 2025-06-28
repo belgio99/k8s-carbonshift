@@ -6,14 +6,14 @@ metadata:
 spec:
   directWeight: 80
   queueWeight: 20
-  flavorRules:
-    - flavorName: high-power
+  flavourRules:
+    - flavourName: high-power
       weight: 30
       deadlineSec: 30
-    - flavorName: mid-power
+    - flavourName: mid-power
       weight: 30
       deadlineSec: 120
-    - flavorName: low-power
+    - flavourName: low-power
       weight: 50
       deadlineSec: 600
   validUntil: "2025-01-01T00:00:00Z"

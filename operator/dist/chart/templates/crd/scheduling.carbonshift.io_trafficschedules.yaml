@@ -56,22 +56,22 @@ spec:
                 description: 'DirectWeight: how much of the traffic should be scheduled
                   directly to the application (percentage)'
                 type: integer
-              flavorRules:
+              flavourRules:
                 items:
-                  description: FlavorRule defines the rules for a specific flavor.
+                  description: FlavourRule defines the rules for a specific flavour.
                   properties:
                     deadlineSec:
                       description: 'DeadlineSec: max delay in seconds'
                       type: integer
-                    flavorName:
+                    flavourName:
                       type: string
                     weight:
                       description: 'Weight: how much of the traffic should be scheduled
-                        to this flavor (percentage)'
+                        to this flavour (percentage)'
                       type: integer
                   required:
                   - deadlineSec
-                  - flavorName
+                  - flavourName
                   - weight
                   type: object
                 type: array
@@ -86,7 +86,7 @@ spec:
             required:
             - consumptionEnabled
             - directWeight
-            - flavorRules
+            - flavourRules
             - queueWeight
             - validUntil
             type: object
