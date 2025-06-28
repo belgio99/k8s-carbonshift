@@ -7,7 +7,6 @@ CustomResource (TrafficSchedule). Exposes Prometheus metrics.
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import json
 import os
 import uuid
@@ -168,6 +167,12 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
             mandatory=True,
         )
         PUBLISHED_MESSAGES.labels(queue=f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}.{q_type}.{flavour}").inc()
+        debug(f"Published message: "
+              f"routing_key={TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}.{q_type}.{flavour}, "
+              f"correlation_id={correlation_id}, "
+              f"expiration_ms={expiration_ms}, "
+              f"flavour={flavour}, "
+              f"forced_flavour={bool(forced_flavour)}")
 
         # ─── wait for RPC response ───
         try:

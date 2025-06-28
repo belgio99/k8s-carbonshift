@@ -214,6 +214,7 @@ async def consume_buffer_queue(
 
         # Buffer consumption is enabled → declare consumer
         queue = await channel.declare_queue(queue_name, durable=True)
+        debug(f"Now listening queue: {queue_name}")
         async with queue.iterator() as iterator:
             async for message in iterator:
                 # If flag flips mid-stream → cancel and restart outer loop
