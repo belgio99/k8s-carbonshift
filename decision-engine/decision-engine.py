@@ -96,14 +96,6 @@ def scheduler_loop():
         sleep_sec = 60 - now.second - now.microsecond/1e6
         time.sleep(max(1, sleep_sec))
 
-@app.before_serving
-def start_metrics_and_bg_thread():  # type: ignore[attr-defined]
-    thr = threading.Thread(target=scheduler_loop, daemon=True)
-    thr.start()
-    metrics_port = int(os.getenv("METRICS_PORT", "9100"))
-    print("Starting Prometheus metrics server on %d", metrics_port)
-    start_http_server(metrics_port)
-
 # ---------- API ----------
 @app.route('/schedule')
 def get_decision():
@@ -128,5 +120,10 @@ def health():
 
 if __name__ == '__main__':
     # start Prometheus metrics server
+    thr = threading.Thread(target=scheduler_loop, daemon=True)
+    thr.start()
+    metrics_port = int(os.getenv("METRICS_PORT", "9100"))
+    print("Starting Prometheus metrics server on %d", metrics_port)
+    start_http_server(metrics_port)
 
     app.run(host='0.0.0.0', port=80)
