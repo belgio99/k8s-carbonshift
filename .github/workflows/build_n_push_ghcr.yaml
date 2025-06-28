@@ -10,7 +10,7 @@ jobs:
   detect-changed-services:
     runs-on: ubuntu-24.04
     outputs:
-      changed-services: ${{ env.changed }}
+      changed-services: ${{ steps.parse-changes.outputs.changed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -85,8 +85,8 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/k8s-carbonshift/${{ matrix.service }}:latest
             ghcr.io/${{ github.repository_owner }}/k8s-carbonshift/${{ matrix.service }}:${{ steps.vars.outputs.sha_short }}
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           platforms: linux/amd64,linux/arm64
 
   build-router:

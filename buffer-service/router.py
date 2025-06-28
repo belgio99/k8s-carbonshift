@@ -28,7 +28,7 @@ from prometheus_client import (
     start_http_server,
 )
 
-from common import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
+from common.utils import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
 from common.schedule import TrafficScheduleManager
 
 # ────────────────────────────────────

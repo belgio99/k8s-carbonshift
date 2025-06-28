@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-carbonshift_consumer.py
+consumer.py
 ────────────────────────────────────────────────────────────────────────────
 Consumes the AMQP queues populated by carbonshift-router, forwards the embedded
 HTTP request to the target service and answers via AMQP (RPC style).
@@ -47,7 +47,7 @@ from prometheus_client import (
     start_http_server,
 )
 
-from common import b64dec, b64enc, log, DEFAULT_SCHEDULE
+from common.utils import b64dec, b64enc, log, DEFAULT_SCHEDULE
 from common.schedule import TrafficScheduleManager
 
 # ──────────────────────────────────────────────────────────────
