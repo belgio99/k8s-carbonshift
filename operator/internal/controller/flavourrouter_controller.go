@@ -173,11 +173,12 @@ func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context, svc corev1.
 func (r *FlavourRouterReconciler) ensureDR(ctx context.Context, svc *corev1.Service) error {
 	ctrl.LoggerFrom(ctx).Info("Ensuring DestinationRule for service", "service", svc.Name)
 	name := fmt.Sprintf("%s-carbonshift-dr", svc.Name)
+	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 
 	newDR := networkingkube.DestinationRule{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
 		Spec: networkingapi.DestinationRule{
-			Host: svc.Name,
+			Host: host,
 			Subsets: []*networkingapi.Subset{
 				{Name: "high-power", Labels: map[string]string{carbonLabel: "high"}},
 				{Name: "mid-power", Labels: map[string]string{carbonLabel: "mid"}},
@@ -264,8 +265,8 @@ func (r *FlavourRouterReconciler) ensureEntryVS(ctx context.Context, svc *corev1
 
 func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *corev1.Service, directW int, wFl map[string]int) error {
 	name := fmt.Sprintf("%s-carbonshift-vs", svc.Name)
-	host := fmt.Sprintf("%s", svc.Name)
-   sourceHost := fmt.Sprintf("%s", svc.Name)
+	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
+   sourceHost := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
     
 	ctrl.LoggerFrom(ctx).Info("Ensuring Flavour VirtualService for service", "service", svc.Name)
 
