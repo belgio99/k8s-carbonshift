@@ -12,6 +12,7 @@ import json
 import os
 import uuid
 from typing import Any, Dict
+import signal
 
 import aio_pika
 import uvicorn
@@ -213,18 +214,35 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
 
     return app
 
-
-# ────────────────────────────────────
-# main
-# ────────────────────────────────────
-if __name__ == "__main__":
-    # Start the Prometheus metrics server
+async def main() -> None:
+    # Prometheus
     start_http_server(METRICS_PORT)
+
     schedule_mgr = TrafficScheduleManager(TS_NAME)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     loop.create_task(schedule_mgr.load_once())
     loop.create_task(schedule_mgr.watch_forever())
     loop.create_task(schedule_mgr.expiry_guard())
 
-    uvicorn.run(create_app(schedule_mgr), host="0.0.0.0", port=8000)
+    app = create_app(schedule_mgr)
+    server = uvicorn.Server(
+        uvicorn.Config(app, host="0.0.0.0", port=8000, lifespan="off")
+    )
+    loop.create_task(server.serve())
+
+    # graceful-shutdown
+    stop_event = asyncio.Event()
+
+    def _stop() -> None:
+        stop_event.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _stop)
+
+    await stop_event.wait()
+    await schedule_mgr.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
