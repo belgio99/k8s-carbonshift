@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY common.py router.py common ./
+COPY common consumer.py ./
 
 RUN pip install --no-cache-dir fastapi uvicorn[standard] aio-pika httpx \
       python-dateutil prometheus-client kubernetes
