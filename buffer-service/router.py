@@ -29,6 +29,7 @@ from prometheus_client import (
 )
 
 from common import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
+from common.schedule import TrafficScheduleManager
 
 # ────────────────────────────────────
 # Config / env
@@ -68,99 +69,6 @@ SCHEDULE_TTL = Gauge(
 # ────────────────────────────────────
 # Schedule keeper
 # ────────────────────────────────────
-class TrafficScheduleManager:
-    """
-    Caches the TrafficSchedule (cluster-scoped CustomResource).
-    Responsibilities:
-      • initial load
-      • continuous watch
-      • refresh on expiry (validUntil)
-    """
-
-    def __init__(self, name: str) -> None:
-        self._name: str = name
-        self._current: dict[str, Any] = DEFAULT_SCHEDULE.copy()
-        self._lock = asyncio.Lock()
-
-        # Kubernetes client setup
-        try:
-            config.load_incluster_config()
-        except Exception:
-            config.load_kube_config()
-
-        self._api = client.CustomObjectsApi()
-        self._watch = k8s_watch.Watch()
-
-    # ──────────────── public ────────────────
-    async def snapshot(self) -> dict[str, Any]:
-        """Returns a thread-safe copy of the current schedule."""
-        async with self._lock:
-            return self._current.copy()
-
-    # ──────────────── upkeep tasks ────────────────
-    async def load_once(self) -> None:
-        """Loads the schedule once (on startup or after expiry)."""
-        try:
-            obj = await asyncio.to_thread(
-                self._api.get_cluster_custom_object,
-                group="scheduling.carbonshift.io",
-                version="v1alpha1",
-                plural="trafficschedules",
-                name=self._name,
-            )
-            async with self._lock:
-                self._current = obj["spec"]
-            log.info("Schedule loaded")
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Schedule load failed: %s", exc)
-
-    async def watch_forever(self) -> None:
-        """Continuous stream of events on the CR; updates the cache in real-time."""
-        field_selector = f"metadata.name={self._name}"
-
-        while True:
-            try:
-                stream = self._watch.stream(
-                    self._api.list_cluster_custom_object,
-                    group="scheduling.carbonshift.io",
-                    version="v1",
-                    plural="trafficschedules",
-                    field_selector=field_selector,
-                    timeout_seconds=90,
-                )
-                for event in stream:
-                    async with self._lock:
-                        self._current = event["object"]["spec"]
-                    log.info("Schedule updated (watch)")
-            except Exception as exc:  # noqa: BLE001
-                log.error("Watch error: %s", exc)
-                await asyncio.sleep(5)
-
-    async def expiry_guard(self) -> None:
-        """
-        Updates the Prometheus gauge with seconds until `validUntil`
-        and forces a reload when it expires.
-        """
-        while True:
-            async with self._lock:
-                valid_until = self._current.get("validUntil")
-
-            try:
-                expiry_dt = date_parser.isoparse(valid_until)
-                seconds_to_expiry = max(
-                    (expiry_dt - dt.datetime.utcnow()).total_seconds(),
-                    0,
-                )
-            except Exception:  # noqa: BLE001
-                seconds_to_expiry = 60  # fallback
-
-            SCHEDULE_TTL.set(seconds_to_expiry)
-
-            # sleep until expiry, then reload
-            await asyncio.sleep(seconds_to_expiry + 1)
-            await self.load_once()
-
-
 # ────────────────────────────────────
 # FastAPI router
 # ────────────────────────────────────
@@ -309,7 +217,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
 if __name__ == "__main__":
     # Start the Prometheus metrics server
     start_http_server(METRICS_PORT)
-    schedule_mgr = TrafficScheduleManager(TRAFFIC_SCHEDULE_NAME)
+    schedule_mgr = TrafficScheduleManager(TS_NAME)
 
     loop = asyncio.get_event_loop()
     loop.create_task(schedule_mgr.load_once())

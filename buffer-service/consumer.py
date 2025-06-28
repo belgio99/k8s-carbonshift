@@ -48,6 +48,7 @@ from prometheus_client import (
 )
 
 from common import b64dec, b64enc, log, DEFAULT_SCHEDULE
+from common.schedule import TrafficScheduleManager
 
 # ──────────────────────────────────────────────────────────────
 # Configuration (env-vars with sane defaults)
@@ -67,7 +68,7 @@ TARGET_BASE_URL: str = (
     + (f":{TARGET_SVC_PORT}" if TARGET_SVC_PORT else "")
 )
 
-TRAFFIC_SCHEDULE_NAME: str = os.getenv("TS_NAME", "traffic-schedule")
+TS_NAME: str = os.getenv("TS_NAME", "traffic-schedule")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
 
 FLAVOURS: tuple[str, ...] = ("high", "mid", "low")
@@ -104,88 +105,6 @@ app = FastAPI(title="carbonshift-consumer", docs_url=None, redoc_url=None)
 @app.get("/metrics")
 def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
-# ──────────────────────────────────────────────────────────────
-# TrafficSchedule (immutable model)
-# ──────────────────────────────────────────────────────────────
-class ScheduleManager:
-    """
-    Loads the TrafficSchedule once per validity window.
-    No in-place patches are expected; a new object appears when validUntil
-    expires, so we simply reload after that timestamp.
-    """
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-
-        # Initial status from defaults
-        self.status: Dict[str, Any] = DEFAULT_SCHEDULE.copy()
-        self.consumption_enabled: bool = bool(
-            self.status.get("consumption_enabled", 1)
-        )
-        self.valid_until: dt.datetime = date_parser.isoparse(
-            self.status["validUntil"]
-        )
-        BUFFER_ENABLED.set(int(self.consumption_enabled))
-
-        # K8s client (works in-cluster and off-cluster)
-        try:
-            k8s_config.load_incluster_config()
-        except Exception:
-            k8s_config.load_kube_config()
-        self._api = k8s_client.CustomObjectsApi()
-
-    # ── helpers ─────────────────────────────────────────────
-    def seconds_to_expiry(self) -> float:
-        """Return non-negative seconds until current schedule expires."""
-        return max(
-            (self.valid_until - dt.datetime.utcnow()).total_seconds(), 0.0
-        )
-
-    async def _load_once(self) -> None:
-        """Fetch the schedule from the API server (blocking call off-thread)."""
-        obj = await asyncio.to_thread(
-            self._api.get_cluster_custom_object,
-            group="scheduling.carbonshift.io",
-            version="v1alpha1",
-            plural="trafficschedules",
-            name=self._name,
-        )
-        self.status =  obj.get("status", {})
-
-        # Extract the two fields the consumer cares about
-        self.consumption_enabled = bool(self.status.get("consumption_enabled", 1))
-
-        try:
-            self.valid_until = date_parser.isoparse(self.status["validUntil"])
-        except (KeyError, TypeError, ValueError):
-            # fallback: retry after 1 minute
-            self.valid_until = dt.datetime.utcnow() + dt.timedelta(minutes=1)
-        BUFFER_ENABLED.set(int(self.consumption_enabled))
-
-        log.info(
-            "TrafficSchedule loaded – enabled=%s  validUntil=%s",
-            self.consumption_enabled,
-            self.valid_until.isoformat(),
-        )
-
-    async def refresh_schedule(self) -> None:
-        """
-        Background loop:
-          • load schedule
-          • sleep until it expires
-          • repeat
-        """
-        while True:
-            try:
-                await self._load_once()
-            except Exception as exc:            # noqa: BLE001
-                log.error("Schedule load error: %s", exc)
-                # fallback: retry quickly
-                await asyncio.sleep(10)
-                continue
-
-            await asyncio.sleep(self.seconds_to_expiry() + 1)
 
 # ──────────────────────────────────────────────────────────────
 # Core helper – forward HTTP + reply over AMQP
@@ -274,7 +193,7 @@ async def consume_direct_queue(
 async def consume_buffer_queue(
     channel: aio_pika.Channel,
     queue_name: str,
-    schedule: ScheduleManager,
+    schedule: TrafficScheduleManager,
     http_client: httpx.AsyncClient,
 ) -> None:
     """
@@ -315,8 +234,12 @@ async def main() -> None:
     # Start the Prometheus metrics server
     start_http_server(METRICS_PORT)
     # TrafficSchedule manager (background task)
-    schedule = ScheduleManager(TRAFFIC_SCHEDULE_NAME)
-    asyncio.create_task(schedule.refresh_schedule())
+    schedule_mgr = TrafficScheduleManager(TS_NAME)
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(schedule_mgr.load_once())
+    loop.create_task(schedule_mgr.watch_forever())
+    loop.create_task(schedule_mgr.expiry_guard())
 
     # AMQP connection / channel
     connection = await aio_pika.connect_robust(RABBITMQ_URL)
@@ -359,7 +282,7 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(connection.close()))
 
-    await connection.closing        # suspend until connection is closed
+    await connection.wait_closed()
 
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":          # pragma: no cover
