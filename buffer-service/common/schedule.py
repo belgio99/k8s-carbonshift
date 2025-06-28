@@ -45,8 +45,7 @@ class TrafficScheduleManager:
             return self._current.copy()
 
     async def load_once(self) -> None:
-        obj = await asyncio.to_thread(
-            self._api.get_cluster_custom_object,
+        obj = await self._api.get_cluster_custom_object(
             group="scheduling.carbonshift.io",
             version="v1alpha1",
             plural="trafficschedules",
