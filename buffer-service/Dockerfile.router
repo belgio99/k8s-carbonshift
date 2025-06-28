@@ -5,7 +5,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir fastapi uvicorn[standard] aio-pika httpx \
       python-dateutil prometheus-client kubernetes
 
-COPY common consumer.py ./
+COPY common router.py ./
 
 EXPOSE 8000 8001
 
