@@ -109,16 +109,18 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
 
         debug(f"Proxy start: method={request.method} path=/{full_path}")
         schedule = await schedule_manager.snapshot()
-        headers: Dict[str, str] = dict(request.headers)
+        
 
         # ─── select strategy / flavour ───
-        urgent = headers.get("x-urgent", "false").lower() == "true"
-        forced_flavour = headers.get("x-carbonshift")
+        urgent = request.headers.get("x-urgent", "false").lower() == "true"
+        forced_flavour = request.headers.get("x-carbonshift")
 
         flavour_weights   = {r["flavourName"]: r["weight"]
                          for r in schedule.get("flavourRules", [])}
         flavour_deadlines = {r["flavourName"]: r.get("deadlineSec", 60)
                          for r in schedule.get("flavourRules", [])}
+        
+        headers: Dict[str, str] = dict(request.headers)
 
         q_type = (
             "direct"
