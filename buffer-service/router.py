@@ -149,6 +149,11 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
 
         consume_tag = await reply_queue.consume(_on_response, no_ack=False)
 
+        def on_return(msg):
+            debug("NO_ROUTE for " + msg.routing_key)
+
+        channel.add_on_return_callback(on_return)
+
         # Publish the message
         await channel.default_exchange.publish(
             aio_pika.Message(
@@ -159,6 +164,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
                 expiration=expiration_ms,
             ),
             routing_key=f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}.{q_type}.{flavour}",
+            mandatory=True,
         )
         PUBLISHED_MESSAGES.labels(queue=f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}.{q_type}.{flavour}").inc()
 

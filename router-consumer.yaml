@@ -65,6 +65,10 @@ spec:
               fieldPath: metadata.namespace
         - name: TS_NAME
           value: "traffic-schedule"
+        - name: DEBUG
+          value: "true"
+        - name: PYTHONUNBUFFERED
+          value: "1"
 ---
 apiVersion: v1
 kind: Service
@@ -173,9 +177,13 @@ spec:
         - name: TARGET_SVC_SCHEME
           value: http
         - name: TARGET_SVC_PORT
-          value: "8000"
+          value: "80"
         - name: TS_NAME
           value: "traffic-schedule"
+        - name: DEBUG
+          value: "true"
+        - name: PYTHONUNBUFFERED
+          value: "1"
 ---
 apiVersion: v1
 kind: Service
