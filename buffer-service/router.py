@@ -34,7 +34,7 @@ from common import DEFAULT_SCHEDULE, b64dec, b64enc, log, weighted_choice
 # Config / env
 # ────────────────────────────────────
 RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-TRAFFIC_SCHEDULE_NAME: str = os.getenv("TRAFFIC_SCHEDULE_NAME", "default")
+TS_NAME: str = os.getenv("TS_NAME", "traffic-schedule")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
 TARGET_SVC_NAME: str = os.getenv("TARGET_SVC_NAME", "unknown-svc").lower()
 TARGET_SVC_NAMESPACE: str = os.getenv("TARGET_SVC_NAMESPACE", "default").lower()
@@ -104,7 +104,7 @@ class TrafficScheduleManager:
             obj = await asyncio.to_thread(
                 self._api.get_cluster_custom_object,
                 group="scheduling.carbonshift.io",
-                version="v1",
+                version="v1alpha1",
                 plural="trafficschedules",
                 name=self._name,
             )

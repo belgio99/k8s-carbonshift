@@ -63,6 +63,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: TS_NAME
+          value: "traffic-schedule"
 ---
 apiVersion: v1
 kind: Service

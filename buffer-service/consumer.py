@@ -12,7 +12,7 @@ Queue layout created by the router:
 TrafficSchedule contract (immutable):
     • A schedule is never patched; when it “expires” (validUntil) a brand new
       object replaces it.
-    • Field `spec.consumption_enabled` (0/1) decides whether *buffer* queues
+    • Field `status.consumption_enabled` (0/1) decides whether *buffer* queues
       must be processed.
 
 This consumer therefore:
@@ -118,13 +118,13 @@ class ScheduleManager:
     def __init__(self, name: str) -> None:
         self._name = name
 
-        # Initial spec from defaults
-        self.spec: Dict[str, Any] = DEFAULT_SCHEDULE.copy()
+        # Initial status from defaults
+        self.status: Dict[str, Any] = DEFAULT_SCHEDULE.copy()
         self.consumption_enabled: bool = bool(
-            self.spec.get("consumption_enabled", 1)
+            self.status.get("consumption_enabled", 1)
         )
         self.valid_until: dt.datetime = date_parser.isoparse(
-            self.spec["validUntil"]
+            self.status["validUntil"]
         )
         BUFFER_ENABLED.set(int(self.consumption_enabled))
 
@@ -147,17 +147,20 @@ class ScheduleManager:
         obj = await asyncio.to_thread(
             self._api.get_cluster_custom_object,
             group="scheduling.carbonshift.io",
-            version="v1",
+            version="v1alpha1",
             plural="trafficschedules",
             name=self._name,
         )
-        self.spec = obj["spec"]
+        self.status =  obj.get("status", {})
 
         # Extract the two fields the consumer cares about
-        self.consumption_enabled = bool(
-            self.spec.get("consumption_enabled", 1)
-        )
-        self.valid_until = date_parser.isoparse(self.spec["validUntil"])
+        self.consumption_enabled = bool(self.status.get("consumption_enabled", 1))
+
+        try:
+            self.valid_until = date_parser.isoparse(self.status["validUntil"])
+        except (KeyError, TypeError, ValueError):
+            # fallback: retry after 1 minute
+            self.valid_until = dt.datetime.utcnow() + dt.timedelta(minutes=1)
         BUFFER_ENABLED.set(int(self.consumption_enabled))
 
         log.info(
