@@ -189,7 +189,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         finally:
             await reply_queue.cancel(consume_tag)
 
-        with rabbit_msg.process():
+        async with rabbit_msg.process():
             response_data = json.loads(rabbit_msg.body)
 
         status_code = int(response_data.get("status", 200))
