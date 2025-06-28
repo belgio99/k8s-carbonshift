@@ -1,4 +1,6 @@
 name: Build and Push Docker Services
+permissions:
+  actions: write
 
 on:
   push:
@@ -126,8 +128,8 @@ jobs:
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
               --push \
-              --cache-from type=gha \
-              --cache-to   type=gha,mode=max \
+              --cache-from type=gha,scope=${{ matrix.service }} \
+              --cache-to   type=gha,mode=max,scope=${{ matrix.service }} \
               --file       ./buffer-service/Dockerfile.${variant} \
               --tag ghcr.io/${{ github.repository_owner }}/k8s-carbonshift/buffer-service-${variant}:latest \
               --tag ghcr.io/${{ github.repository_owner }}/k8s-carbonshift/buffer-service-${variant}:${{ steps.vars.outputs.sha_short }} \

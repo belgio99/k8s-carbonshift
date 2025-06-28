@@ -51,7 +51,7 @@ from common.utils import b64dec, b64enc, log, DEFAULT_SCHEDULE
 from common.schedule import TrafficScheduleManager
 
 # ──────────────────────────────────────────────────────────────
-# Configuration (env-vars with sane defaults)
+# Configuration
 # ──────────────────────────────────────────────────────────────
 RABBITMQ_URL: str = os.getenv(
     "RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"
