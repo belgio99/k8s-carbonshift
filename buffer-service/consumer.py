@@ -292,6 +292,7 @@ async def main() -> None:
 
     await connection.close()
     await http_client.aclose()
+    await schedule_mgr.close()
 
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":          # pragma: no cover
