@@ -63,7 +63,7 @@ TARGET_SVC_PORT: str | None = os.getenv("TARGET_SVC_PORT")
 
 # e.g. http://unknown-svc.default[:port]
 TARGET_BASE_URL: str = (
-    f"{TARGET_SVC_SCHEME}://{TARGET_SVC_NAME}.{TARGET_SVC_NAMESPACE}"
+    f"{TARGET_SVC_SCHEME}://{TARGET_SVC_NAME}.{TARGET_SVC_NAMESPACE}.svc.cluster.local"
     + (f":{TARGET_SVC_PORT}" if TARGET_SVC_PORT else "")
 )
 
