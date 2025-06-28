@@ -89,7 +89,6 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		log.Info("Flavour weights", "flavour", fr.FlavourName, "weight", fr.Weight)
 	}
 	directW := trafficschedule.DirectWeight
-	queueW := trafficschedule.QueueWeight
 
 	// 4. Create or update the Gateway, DestinationRule and VirtualServices
 
