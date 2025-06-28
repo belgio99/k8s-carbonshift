@@ -126,6 +126,13 @@ async def forward_and_reply(
             payload: Dict[str, Any] = json.loads(message.body)
 
             debug(f"Payload: method={payload.get('method')} path={payload.get('path')} headers={payload.get('headers')}")
+
+            orig_headers = payload.get("headers", {})
+
+            clean = {k: v for k, v in orig_headers.items()
+                     if k.lower() != "x-carbonshift"}
+            
+            clean["x-carbonshift"] = flavour
             response = await http_client.request(
                 method=payload["method"],
                 url=f"{TARGET_BASE_URL}{payload['path']}",
