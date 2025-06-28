@@ -1,7 +1,4 @@
 name: Build and Push Docker Services
-permissions:
-  actions: write
-  packages: write
 
 on:
   push:
@@ -92,7 +89,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           platforms: linux/amd64,linux/arm64
 
-  build-router:
+  build-buffer-service:
     needs: detect-changed-services
     if: contains(needs.detect-changed-services.outputs.changed-services, 'buffer-service')
     runs-on: ubuntu-latest

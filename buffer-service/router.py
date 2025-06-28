@@ -63,12 +63,12 @@ SCHEDULE_TTL = Gauge(
     "Seconds until schedule expiry",
 )
 
-# ────────────────────────────────────
+# ───────────────────────────────────
 # Schedule keeper
-# ────────────────────────────────────
-# ────────────────────────────────────
+# ───────────────────────────────────
+# ───────────────────────────────────
 # FastAPI router
-# ────────────────────────────────────
+# ───────────────────────────────────
 def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
     """
     Builds the FastAPI instance with:
