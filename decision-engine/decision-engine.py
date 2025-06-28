@@ -96,9 +96,8 @@ def scheduler_loop():
         sleep_sec = 60 - now.second - now.microsecond/1e6
         time.sleep(max(1, sleep_sec))
 
-# start the thread once Flask has started
-@app.before_first_request  # type: ignore[attr-defined]
-def _start_bg_thread():
+@app.before_serving
+def start_metrics_and_bg_thread():  # type: ignore[attr-defined]
     thr = threading.Thread(target=scheduler_loop, daemon=True)
     thr.start()
     metrics_port = int(os.getenv("METRICS_PORT", "9100"))
