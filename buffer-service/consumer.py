@@ -70,7 +70,7 @@ TARGET_BASE_URL: str = (
 TS_NAME: str = os.getenv("TS_NAME", "traffic-schedule")
 METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
 
-FLAVOURS: tuple[str, ...] = ("high", "mid", "low")
+FLAVOURS: tuple[str, ...] = ("high-power", "mid-power", "low-power")
 QUEUE_PREFIX: str = f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}"
 
 # ──────────────────────────────────────────────────────────────
@@ -178,6 +178,7 @@ async def consume_direct_queue(
     Consume <prefix>.direct.<flavour> – always active.
     """
     queue = await channel.declare_queue(queue_name, durable=True)
+    debug(f"Now listening direct: {queue_name}")
 
     async with queue.iterator() as iterator:
         async for message in iterator:
