@@ -263,9 +263,9 @@ func (r *FlavourRouterReconciler) ensureEntryVS(ctx context.Context, svc *corev1
 }
 
 func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *corev1.Service, directW int, wFl map[string]int) error {
-	name := fmt.Sprintf("%s", svc.Name)
-	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
-   sourceHost := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
+	name := fmt.Sprintf("%s-carbonshift-vs", svc.Name)
+	host := fmt.Sprintf("%s", svc.Name)
+   sourceHost := fmt.Sprintf("%s", svc.Name)
     
 	ctrl.LoggerFrom(ctx).Info("Ensuring Flavour VirtualService for service", "service", svc.Name)
 
