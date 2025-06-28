@@ -40,7 +40,7 @@ jobs:
             done
           fi
           echo "Changed services (containers to be rebuilt): $changed_services"
-          echo "changed=$changed_services" >> $GITHUB_ENV
+          echo "changed=$changed_services" >> $GITHUB_OUTPUT
 
   build-containers:
     needs: detect-changed-services

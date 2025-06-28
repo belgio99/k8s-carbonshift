@@ -60,7 +60,7 @@ RABBITMQ_URL: str = os.getenv(
 TARGET_SVC_NAMESPACE: str = os.getenv("TARGET_SVC_NAMESPACE", "default").lower()
 TARGET_SVC_NAME: str = os.getenv("TARGET_SVC_NAME", "unknown-svc").lower()
 TARGET_SVC_SCHEME: str = os.getenv("TARGET_SVC_SCHEME", "http")
-TARGET_SVC_PORT: str | None = os.getenv("TARGET_SVC_PORT")          # optional
+TARGET_SVC_PORT: str | None = os.getenv("TARGET_SVC_PORT")
 
 # e.g. http://unknown-svc.default[:port]
 TARGET_BASE_URL: str = (
