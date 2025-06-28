@@ -287,11 +287,11 @@ async def main() -> None:
 
     stop_event = asyncio.Event()
 
-     def _stop() -> None:
-         stop_event.set()
+    def _stop() -> None:
+        stop_event.set()
 
-     for sig in (signal.SIGINT, signal.SIGTERM):
-         loop.add_signal_handler(sig, _stop)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _stop)
 
     # Graceful shutdown
     loop = asyncio.get_running_loop()
