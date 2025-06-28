@@ -122,8 +122,8 @@ if __name__ == '__main__':
     # start Prometheus metrics server
     thr = threading.Thread(target=scheduler_loop, daemon=True)
     thr.start()
-    metrics_port = int(os.getenv("METRICS_PORT", "9100"))
-    print("Starting Prometheus metrics server on %d", metrics_port)
+    metrics_port = int(os.getenv("METRICS_PORT", "8001"))
+    print("Starting Prometheus metrics server on port ", metrics_port)
     start_http_server(metrics_port)
 
     app.run(host='0.0.0.0', port=80)
