@@ -129,9 +129,9 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
             )
         )
 
-        flavour = forced_flavour or weighted_choice(schedule["flavourRules"])
+        flavour = forced_flavour or weighted_choice(flavour_weights)
         debug(f"Selected routing: q_type={q_type}, flavour={flavour}, forced={bool(forced_flavour)}")
-        deadline_sec = schedule["deadlines"].get(f"{flavour}-power", 60)
+        deadline_sec = flavour_deadlines.get(flavour, 60)
         expiration_ms = int(deadline_sec * 1000)
 
         # ─── build payload ───
