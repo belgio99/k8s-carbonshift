@@ -1,6 +1,7 @@
 name: Build and Push Docker Services
 permissions:
   actions: write
+  packages: write
 
 on:
   push:
