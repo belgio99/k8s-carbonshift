@@ -44,10 +44,6 @@ dependencies:
     version: 0.1.0
     repository: file://../decision-engine
 
-  - name: buffer-service
-    version: 0.1.0
-    repository: file://../buffer-service
-
   - name: carbonshift-operator
     version: 0.1.0
     repository: file://../../operator/dist/chart

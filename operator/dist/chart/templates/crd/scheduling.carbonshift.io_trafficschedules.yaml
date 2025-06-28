@@ -48,6 +48,10 @@ spec:
           status:
             description: TrafficScheduleStatus defines the observed state of TrafficSchedule.
             properties:
+              consumptionEnabled:
+                description: 'ConsumptionEnabled: whether the traffic consumption
+                  is enabled'
+                type: boolean
               directWeight:
                 description: 'DirectWeight: how much of the traffic should be scheduled
                   directly to the application (percentage)'
@@ -80,6 +84,7 @@ spec:
                 format: date-time
                 type: string
             required:
+            - consumptionEnabled
             - directWeight
             - flavorRules
             - queueWeight

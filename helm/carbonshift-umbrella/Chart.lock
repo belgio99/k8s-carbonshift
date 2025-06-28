@@ -17,11 +17,8 @@ dependencies:
 - name: decision-engine
   repository: file://../decision-engine
   version: 0.1.0
-- name: buffer-service
-  repository: file://../buffer-service
-  version: 0.1.0
 - name: carbonshift-operator
   repository: file://../../operator/dist/chart
   version: 0.1.0
-digest: sha256:cc79d4ef56a24dfcf51636f2a7ce678c1687024feda58e5514ebcd0f3628a0b2
-generated: "2025-06-26T11:06:26.856747+02:00"
+digest: sha256:2b1a04605309853d392ad72e688f0682caeddb2b0e9c40445d3da925bdf65e89
+generated: "2025-06-28T13:00:26.081203+02:00"
