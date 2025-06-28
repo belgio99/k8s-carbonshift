@@ -283,7 +283,7 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 		httpRoutes = append(httpRoutes, &networkingapi.HTTPRoute{
 			Match: []*networkingapi.HTTPMatchRequest{{
 				Headers: map[string]*networkingapi.StringMatch{
-					"X-Carbonshift": {MatchType: &networkingapi.StringMatch_Exact{Exact: m.val}},
+					"x-carbonshift": {MatchType: &networkingapi.StringMatch_Exact{Exact: m.val}},
 				},
 			}},
 			Route: []*networkingapi.HTTPRouteDestination{{
