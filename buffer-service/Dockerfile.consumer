@@ -2,11 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY common consumer.py ./
-
 RUN pip install --no-cache-dir aio-pika httpx kubernetes \
       prometheus-client fastapi uvicorn
+      
+COPY common consumer.py ./
 
-EXPOSE 8001
+EXPOSE 8000 8001
 
 CMD ["python", "consumer.py"]
