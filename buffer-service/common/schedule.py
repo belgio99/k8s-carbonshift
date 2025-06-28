@@ -10,7 +10,7 @@ from typing import Any
 from dateutil import parser as date_parser
 from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_watch
 
-from common import DEFAULT_SCHEDULE, log
+from .utils import DEFAULT_SCHEDULE, log
 
 __all__ = ["TrafficScheduleManager"]
 
