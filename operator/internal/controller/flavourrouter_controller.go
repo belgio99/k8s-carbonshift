@@ -179,9 +179,9 @@ func (r *FlavourRouterReconciler) ensureDR(ctx context.Context, svc *corev1.Serv
 		Spec: networkingapi.DestinationRule{
 			Host: svc.Name,
 			Subsets: []*networkingapi.Subset{
-				{Name: "high-power", Labels: map[string]string{carbonLabel: "high-power"}},
-				{Name: "mid-power", Labels: map[string]string{carbonLabel: "mid-power"}},
-				{Name: "low-power", Labels: map[string]string{carbonLabel: "low-power"}},
+				{Name: "high-power", Labels: map[string]string{carbonLabel: "high"}},
+				{Name: "mid-power", Labels: map[string]string{carbonLabel: "mid"}},
+				{Name: "low-power", Labels: map[string]string{carbonLabel: "low"}},
 			},
 		},
 	}
