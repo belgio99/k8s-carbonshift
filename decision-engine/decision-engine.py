@@ -25,7 +25,7 @@ def get_decision():
       "deadlines": {
         "low-power": 600,
         "mid-power": 120,
-        "high-power": 30
+        "high-power": 40
       },
       "validUntil": valid_until_iso
     }
