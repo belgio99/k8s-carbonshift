@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir aio-pika httpx kubernetes \
+RUN pip install --no-cache-dir aio-pika httpx kubernetes-asyncio \
       prometheus-client fastapi uvicorn
       
 COPY consumer.py ./

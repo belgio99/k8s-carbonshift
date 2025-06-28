@@ -8,7 +8,7 @@ import datetime as dt
 from typing import Any
 
 from dateutil import parser as date_parser
-from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_watch
+from kubernetes_asyncio import client as k8s_client, config as k8s_config, watch as k8s_watch
 
 from .utils import DEFAULT_SCHEDULE, log
 
@@ -68,7 +68,7 @@ class TrafficScheduleManager:
                     field_selector=field_selector,
                     timeout_seconds=90,
                 )
-                for event in stream:
+                async for event in stream:
                     async with self._lock:
                         self._current = event["object"].get("status", {})
                     log.info("TrafficSchedule updated (watch)")

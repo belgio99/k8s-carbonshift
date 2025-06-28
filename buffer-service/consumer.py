@@ -37,7 +37,6 @@ import httpx
 import uvicorn
 from dateutil import parser as date_parser
 from fastapi import FastAPI, Response
-from kubernetes import client as k8s_client, config as k8s_config
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -246,7 +245,12 @@ async def main() -> None:
     loop.create_task(schedule_mgr.expiry_guard())
 
     # AMQP connection / channel
-    connection = await aio_pika.connect_robust(RABBITMQ_URL)
+    try:
+        connection = await aio_pika.connect_robust(RABBITMQ_URL)
+    except Exception as exc:
+        log.error("Failed to connect to RabbitMQ: %s", exc)
+        return
+
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=20)
 

@@ -14,11 +14,9 @@ import uuid
 from typing import Any, Dict
 
 import aio_pika
-import httpx
 import uvicorn
 from dateutil import parser as date_parser
 from fastapi import FastAPI, HTTPException, Request, Response
-from kubernetes import client, config, watch as k8s_watch
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
