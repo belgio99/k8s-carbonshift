@@ -1,5 +1,5 @@
-Flask==2.0.1
+Flask==2.2.5
 pika==1.2.0
-requests==2.26.0
+requests==2.32.2
 python-dotenv==0.19.1
 Werkzeug==2.0.3
