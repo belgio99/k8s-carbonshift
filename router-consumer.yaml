@@ -155,6 +155,9 @@ spec:
         app.kubernetes.io/part-of:     carbonshift
         app.kubernetes.io/managed-by:  carbonshift-operator
         carbonshift/parent-service:    carbonstat
+        istio.io/rev: default
+      annotations:
+        sidecar.istio.io/inject: "true"
     spec:
       serviceAccountName: trafficschedule-viewer-sa
       containers:
@@ -225,3 +228,23 @@ spec:
     - port: metrics
       interval: 15s
       path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: envoy-buffer-consumer
+  namespace: carbonshift-system
+  labels:
+    release: carbonshift
+spec:
+  namespaceSelector:
+    matchNames: ["carbonstat"]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: buffer-service-consumer
+      app.kubernetes.io/instance: carbonshift
+  podMetricsEndpoints:
+    - port: http-envoy-prom
+      path: /stats/prometheus
+      interval: 15s
+---

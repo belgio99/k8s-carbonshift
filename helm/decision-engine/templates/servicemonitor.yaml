@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "decision-engine.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    release: carbonshift
+    {{- include "decision-engine.labels" . | nindent 4 }}
+spec:
+   selector:
+      matchLabels:
+       {{- include "decision-engine.selectorLabels" . | nindent 6 }}
+   endpoints:
+      - port: metrics
+        interval: 15s
