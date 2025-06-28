@@ -285,10 +285,20 @@ async def main() -> None:
     server = uvicorn.Server(config)
     asyncio.create_task(server.serve())
 
+    stop_event = asyncio.Event()
+
+     def _stop() -> None:
+         stop_event.set()
+
+     for sig in (signal.SIGINT, signal.SIGTERM):
+         loop.add_signal_handler(sig, _stop)
+
     # Graceful shutdown
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(connection.close()))
+
+    await stop_event.wait()
 
     await connection.close()
     await http_client.aclose()
