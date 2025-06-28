@@ -5,7 +5,8 @@ WORKDIR /app
 RUN pip install --no-cache-dir aio-pika httpx kubernetes \
       prometheus-client fastapi uvicorn
       
-COPY common consumer.py ./
+COPY consumer.py ./
+COPY common ./common/
 
 EXPOSE 8000 8001
 
