@@ -116,7 +116,7 @@ async def _init_rabbit() -> None:
         if future and not future.done():
             future.set_result(msg)
 
-    await rabbit_state["channel"].consume(_on_reply, queue_name="amq.rabbitmq.reply-to", no_ack=True)
+    await rabbit_state["channel"].basic_consume(_on_reply, queue_name="amq.rabbitmq.reply-to", no_ack=True)
 
 
 async def get_rabbit_channel() -> aio_pika.Channel:
