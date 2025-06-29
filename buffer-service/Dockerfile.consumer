@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN pip install --no-cache-dir aio-pika httpx kubernetes-asyncio \
-      prometheus-client fastapi uvicorn
+      prometheus-client fastapi uvicorn uvloop
       
 COPY consumer.py ./
 COPY common ./common/
