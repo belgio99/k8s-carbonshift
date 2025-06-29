@@ -4,12 +4,6 @@ carbonshift_router.py
 ────────────────────────────────────────────────────────────────────────────
 HTTP → RabbitMQ router with “direct/queue” load balancing based on a
 CustomResource (TrafficSchedule).  Espone metriche Prometheus.
-
-REV-notes (2024-06)
-  • Usa un *headers-exchange* invece della routing-key “<ns>.<svc>.…”.
-  • Una sola reply-queue condivisa; le risposte vengono demultiplexate
-    tramite `correlation_id` → Future (niente più declare/cancel per req).
-  • Tutto il resto è invariato.
 """
 from __future__ import annotations
 
@@ -21,6 +15,7 @@ import json
 import os
 import signal
 import uuid
+import time
 from typing import Any, Dict
 
 import aio_pika
@@ -159,6 +154,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
     )
     async def proxy(full_path: str, request: Request) -> Response:  # noqa: C901
         debug(f"Proxy start: method={request.method} path=/{full_path}")
+        start_ts = time.perf_counter()
         schedule = await schedule_manager.snapshot()
 
         # ─── select strategy / flavour ───
@@ -239,6 +235,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
             rabbit_msg = await asyncio.wait_for(response_future, timeout=deadline_sec)
         except asyncio.TimeoutError:
             rabbit_state["pending"].pop(correlation_id, None)
+            HTTP_LATENCY.labels(q_type, flavour).observe(time.perf_counter() - start_ts)
             HTTP_REQUESTS.labels(
                 request.method, "504", q_type, flavour, bool(forced_flavour)
             ).inc()
@@ -250,7 +247,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         HTTP_REQUESTS.labels(
             request.method, str(status_code), q_type, flavour, bool(forced_flavour)
         ).inc()
-        HTTP_LATENCY.labels(q_type, flavour).observe(float(deadline_sec))
+        HTTP_LATENCY.labels(q_type, flavour).observe(time.perf_counter() - start_ts)
 
         response_headers = {
             k: v

@@ -266,3 +266,42 @@ spec:
       path: /stats/prometheus
       interval: 15s
 ---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: carbon-consumer-direct
+  namespace: carbonstat
+spec:
+  scaleTargetRef:
+    name: carbon-consumer
+  pollingInterval: 5
+  cooldownPeriod: 30
+  minReplicaCount: 0
+  maxReplicaCount: 15
+  triggers:
+  # --- direct.low-power ---
+  - type: rabbitmq
+    authenticationRef:
+      name: rabbitmq-auth
+      kind: ClusterTriggerAuthentication   # se stai usando la CTA
+    metadata:
+      queueName: carbonstat.carbonstat.direct.low-power
+      queueLength: "1"
+
+  # --- direct.mid-power ---
+  - type: rabbitmq
+    authenticationRef:
+      name: rabbitmq-auth
+      kind: ClusterTriggerAuthentication
+    metadata:
+      queueName: carbonstat.carbonstat.direct.mid-power
+      queueLength: "1"
+
+  # --- direct.high-power ---
+  - type: rabbitmq
+    authenticationRef:
+      name: rabbitmq-auth
+      kind: ClusterTriggerAuthentication
+    metadata:
+      queueName: carbonstat.carbonstat.direct.high-power
+      queueLength: "1"

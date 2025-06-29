@@ -11,6 +11,9 @@ dependencies:
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 75.6.0
+- name: keda
+  repository: https://kedacore.github.io/charts
+  version: 2.17.2
 - name: rabbitmq
   repository: https://charts.bitnami.com/bitnami
   version: 16.0.1
@@ -20,5 +23,5 @@ dependencies:
 - name: carbonshift-operator
   repository: file://../../operator/dist/chart
   version: 0.1.0
-digest: sha256:2b1a04605309853d392ad72e688f0682caeddb2b0e9c40445d3da925bdf65e89
-generated: "2025-06-28T13:00:26.081203+02:00"
+digest: sha256:a740f3e5d4d926f8bc4a62c325fd01c7f49f7d700f37944935915e40e4244cb1
+generated: "2025-06-29T19:05:49.426951+02:00"
