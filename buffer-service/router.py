@@ -13,6 +13,9 @@ REV-notes (2024-06)
 """
 from __future__ import annotations
 
+import uvloop
+uvloop.install() # type: ignore
+
 import asyncio
 import json
 import os
