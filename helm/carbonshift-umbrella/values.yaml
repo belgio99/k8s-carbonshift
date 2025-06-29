@@ -51,6 +51,12 @@ carbonshift-operator:
     sidecar.istio.io/inject: "false"
 
 kube-prometheus-stack:
+  kube-state-metrics:
+    metricLabelsAllowlist:
+      - deployments=[*]
+      - pods=[*]
+      - namespaces=[*]
+      - services=[*]
   prometheus-node-exporter:
     hostRootFsMount:
       enabled: false

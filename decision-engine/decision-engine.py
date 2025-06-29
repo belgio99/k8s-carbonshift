@@ -10,6 +10,7 @@ g_direct  = Gauge('schedule_direct_weight',  'Direct weight in use')
 g_queue   = Gauge('schedule_queue_weight',   'Queue weight in use')
 g_flavour = Gauge('schedule_flavour_weight', 'Weight per flavour', ['flavour'])
 g_valid   = Gauge('schedule_valid_until',    'UNIX epoch of validUntil')
+g_consumption = Gauge('schedule_consumption_enabled', 'Consumption Enabled flag (1=enabled, 0=disabled)')
 
 # ---- shared state ----
 schedule_lock   = threading.Lock()
@@ -80,6 +81,7 @@ def update_metrics(sched):
         sched['validUntil'], '%Y-%m-%dT%H:%M:%SZ'
     ).replace(tzinfo=datetime.timezone.utc).timestamp()
     g_valid.set(valid_epoch)
+    g_consumption.set(1 if sched.get('consumptionEnabled', False) else 0)
 
 def scheduler_loop():
     global current_schedule, step_counter
