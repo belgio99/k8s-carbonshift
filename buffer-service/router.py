@@ -26,11 +26,9 @@ import uvicorn
 from dateutil import parser as date_parser
 from fastapi import FastAPI, HTTPException, Request, Response
 from prometheus_client import (
-    CONTENT_TYPE_LATEST,
     Counter,
     Gauge,
     Histogram,
-    generate_latest,
     start_http_server,
 )
 
@@ -83,6 +81,8 @@ rabbit_state: dict[str, Any] = {
     "pending": {},  # correlation_id → Future
 }
 
+init_lock = asyncio.Lock()
+
 
 async def _init_rabbit() -> None:
     """
@@ -91,6 +91,10 @@ async def _init_rabbit() -> None:
     """
     if rabbit_state["channel"] and not rabbit_state["channel"].is_closed:
         return  # già inizializzato
+    
+    async with init_lock:
+        if rabbit_state.get("exchange"):
+            return
 
     # Connessione e channel robust
     rabbit_state["connection"] = await aio_pika.connect_robust(RABBITMQ_URL)
@@ -123,6 +127,10 @@ async def get_rabbit_channel() -> aio_pika.Channel:
     """Restituisce il canale AMQP già inizializzato."""
     await _init_rabbit()
     return rabbit_state["channel"]
+
+async def get_exchange() -> aio_pika.Exchange:   # NEW
+    await _init_rabbit()
+    return rabbit_state["exchange"]
 
 
 # ────────────────────────────────────
@@ -191,7 +199,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         )
         rabbit_state["pending"][correlation_id] = response_future
 
-        exchange: aio_pika.Exchange = rabbit_state["exchange"]
+        exchange = await get_exchange()
 
         await exchange.publish(
             aio_pika.Message(
