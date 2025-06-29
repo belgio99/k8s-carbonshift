@@ -191,7 +191,6 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         )
         rabbit_state["pending"][correlation_id] = response_future
 
-        channel = await get_rabbit_channel()
         exchange: aio_pika.Exchange = rabbit_state["exchange"]
 
         await exchange.publish(
