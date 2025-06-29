@@ -21,7 +21,7 @@ import uuid
 from typing import Any, Dict
 
 import aio_pika
-from aio_pika import ExchangeType
+from aio_pika import ExchangeType, Queue
 import uvicorn
 from dateutil import parser as date_parser
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -116,7 +116,16 @@ async def _init_rabbit() -> None:
         if future and not future.done():
             future.set_result(msg)
 
-    await rabbit_state["channel"].basic_consume(_on_reply, queue_name="amq.rabbitmq.reply-to", no_ack=True)
+    reply_queue = Queue(
+        rabbit_state["channel"],
+        name="amq.rabbitmq.reply-to",
+        passive=True,
+        durable=False,
+        exclusive=False,
+        auto_delete=False,
+        arguments=None,
+    )
+    await reply_queue.consume(_on_reply, no_ack=True)
 
 
 async def get_rabbit_channel() -> aio_pika.Channel:
