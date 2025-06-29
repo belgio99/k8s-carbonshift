@@ -5,7 +5,7 @@ consumer.py
 Consumes the AMQP queues populated by carbonshift-router, forwards the embedded
 HTTP request to the target service and answers via AMQP (RPC style).
 
-Queue layout created by the router:
+Queue layout used by the router (same names, but **bound via a headers-exchange**):
     <namespace>.<service>.direct.<flavour>   – real-time path
     <namespace>.<service>.queue.<flavour>    – buffer path (may be paused)
 
@@ -15,13 +15,12 @@ TrafficSchedule contract (immutable):
     • Field `status.consumption_enabled` (0/1) decides whether *buffer* queues
       must be processed.
 
-This consumer therefore:
+The consumer therefore:
     1. Loads the schedule once per validity window.
     2. If buffers are disabled, sleeps until `validUntil`.
     3. Reloads the next schedule and repeats.
     4. Keeps consuming real-time queues all the time.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -33,6 +32,7 @@ import time
 from typing import Any, Dict
 
 import aio_pika
+from aio_pika import ExchangeType
 import httpx
 import uvicorn
 from dateutil import parser as date_parser
@@ -46,7 +46,7 @@ from prometheus_client import (
     start_http_server,
 )
 
-from common.utils import b64dec, b64enc, log, DEFAULT_SCHEDULE, debug
+from common.utils import b64dec, b64enc, debug, log, DEFAULT_SCHEDULE
 from common.schedule import TrafficScheduleManager
 
 # ─────────────────────────────────────────────────────────────
@@ -72,6 +72,7 @@ METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8001"))
 
 FLAVOURS: tuple[str, ...] = ("high-power", "mid-power", "low-power")
 QUEUE_PREFIX: str = f"{TARGET_SVC_NAMESPACE}.{TARGET_SVC_NAME}"
+EXCHANGE_NAME: str = QUEUE_PREFIX
 
 # ──────────────────────────────────────────────────────────────
 # Prometheus metrics
@@ -125,14 +126,15 @@ async def forward_and_reply(
         try:
             payload: Dict[str, Any] = json.loads(message.body)
 
-            debug(f"Payload: method={payload.get('method')} path={payload.get('path')} headers={payload.get('headers')}")
+            debug(
+                f"Payload: method={payload.get('method')} path={payload.get('path')} "
+                f"headers={payload.get('headers')}"
+            )
 
             orig_headers = payload.get("headers", {})
-
-            clean = {k: v for k, v in orig_headers.items()
-                     if k.lower() != "x-carbonshift"}
-            
+            clean = {k: v for k, v in orig_headers.items() if k.lower() != "x-carbonshift"}
             clean["x-carbonshift"] = flavour
+
             response = await http_client.request(
                 method=payload["method"],
                 url=f"{TARGET_BASE_URL}{payload['path']}",
@@ -178,32 +180,45 @@ async def forward_and_reply(
 # ──────────────────────────────────────────────────────────────
 async def consume_direct_queue(
     channel: aio_pika.Channel,
-    queue_name: str,
+    exchange: aio_pika.Exchange,
+    flavour: str,
     http_client: httpx.AsyncClient,
 ) -> None:
     """
     Consume <prefix>.direct.<flavour> – always active.
     """
+    queue_name = f"{QUEUE_PREFIX}.direct.{flavour}"
     queue = await channel.declare_queue(queue_name, durable=True)
+
+    # Bind via headers
+    await queue.bind(
+        exchange,
+        arguments={
+            "x-match": "all",
+            "q_type": "direct",
+            "flavour": flavour,
+        },
+    )
     debug(f"Now listening direct: {queue_name}")
 
     async with queue.iterator() as iterator:
         async for message in iterator:
-            flavour = message.headers.get("flavour", "mid")
+            flavour_hdr = message.headers.get("flavour", flavour)
             status, dt_sec = await forward_and_reply(
-                message, flavour, channel, http_client
+                message, flavour_hdr, channel, http_client
             )
 
-            MSG_CONSUMED.labels("direct", flavour).inc()
-            HTTP_FORWARD_COUNT.labels(str(status), flavour).inc()
-            HTTP_FORWARD_LAT.labels(flavour).observe(dt_sec)
+            MSG_CONSUMED.labels("direct", flavour_hdr).inc()
+            HTTP_FORWARD_COUNT.labels(str(status), flavour_hdr).inc()
+            HTTP_FORWARD_LAT.labels(flavour_hdr).observe(dt_sec)
 
 # ──────────────────────────────────────────────────────────────
 # Worker – buffer path (queue.*)  pausable via TrafficSchedule
 # ──────────────────────────────────────────────────────────────
 async def consume_buffer_queue(
     channel: aio_pika.Channel,
-    queue_name: str,
+    exchange: aio_pika.Exchange,
+    flavour: str,
     schedule: TrafficScheduleManager,
     http_client: httpx.AsyncClient,
 ) -> None:
@@ -217,12 +232,21 @@ async def consume_buffer_queue(
             sleep_for = schedule.seconds_to_expiry() + 1
             log.info("Buffers disabled – sleeping %.0fs", sleep_for)
             await asyncio.sleep(sleep_for)
-            # schedule.refresh_forever() will reload by then
-            continue
+            continue  # schedule will be refreshed by background task
 
         # Buffer consumption is enabled → declare consumer
+        queue_name = f"{QUEUE_PREFIX}.queue.{flavour}"
         queue = await channel.declare_queue(queue_name, durable=True)
+        await queue.bind(
+            exchange,
+            arguments={
+                "x-match": "all",
+                "q_type": "queue",
+                "flavour": flavour,
+            },
+        )
         debug(f"Now listening queue: {queue_name}")
+
         async with queue.iterator() as iterator:
             async for message in iterator:
                 # If flag flips mid-stream → cancel and restart outer loop
@@ -230,14 +254,14 @@ async def consume_buffer_queue(
                     await iterator.close()
                     break
 
-                flavour = message.headers.get("flavour", "mid")
+                flavour_hdr = message.headers.get("flavour", flavour)
                 status, dt_sec = await forward_and_reply(
-                    message, flavour, channel, http_client
+                    message, flavour_hdr, channel, http_client
                 )
 
-                MSG_CONSUMED.labels("queue", flavour).inc()
-                HTTP_FORWARD_COUNT.labels(str(status), flavour).inc()
-                HTTP_FORWARD_LAT.labels(flavour).observe(dt_sec)
+                MSG_CONSUMED.labels("queue", flavour_hdr).inc()
+                HTTP_FORWARD_COUNT.labels(str(status), flavour_hdr).inc()
+                HTTP_FORWARD_LAT.labels(flavour_hdr).observe(dt_sec)
 
 # ──────────────────────────────────────────────────────────────
 # Main bootstrap
@@ -245,6 +269,7 @@ async def consume_buffer_queue(
 async def main() -> None:
     # Start the Prometheus metrics server
     start_http_server(METRICS_PORT)
+
     # TrafficSchedule manager (background task)
     schedule_mgr = TrafficScheduleManager(TS_NAME)
 
@@ -263,22 +288,31 @@ async def main() -> None:
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=20)
 
+    # Declare headers-exchange (same name as router)
+    exchange = await channel.declare_exchange(
+        EXCHANGE_NAME, ExchangeType.HEADERS, durable=True
+    )
+
     # Shared HTTP client
     http_client = httpx.AsyncClient()
 
-    # Spawn one worker per (queue type, flavour)
+    # Spawn one worker per (queue_type, flavour)
     for flavour in FLAVOURS:
         # Realtime path
         asyncio.create_task(
             consume_direct_queue(
-                channel, f"{QUEUE_PREFIX}.direct.{flavour}", http_client
+                channel,
+                exchange,
+                flavour,
+                http_client,
             )
         )
         # Buffer path
         asyncio.create_task(
             consume_buffer_queue(
                 channel,
-                f"{QUEUE_PREFIX}.queue.{flavour}",
+                exchange,
+                flavour,
                 schedule_mgr,
                 http_client,
             )
@@ -303,9 +337,10 @@ async def main() -> None:
         loop.add_signal_handler(sig, _stop)
 
     # Graceful shutdown
-    loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(connection.close()))
+        loop.add_signal_handler(
+            sig, lambda: asyncio.create_task(connection.close())
+        )
 
     await stop_event.wait()
 

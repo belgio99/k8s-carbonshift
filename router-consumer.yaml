@@ -66,9 +66,16 @@ spec:
         - name: TS_NAME
           value: "traffic-schedule"
         - name: DEBUG
-          value: "true"
+          value: "false"
         - name: PYTHONUNBUFFERED
           value: "1"
+        resources:
+          requests:
+            cpu: "1"
+            memory: "256Mi"
+          limits:
+            cpu: "2"
+            memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -126,7 +133,11 @@ spec:
   endpoints:
     - port: metrics
       interval: 15s
-      path: /metrics
+      path: /metrics/detailed
+      params:
+        family:
+        - queue_coarse_metrics
+        - queue_consumer_count
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -184,9 +195,16 @@ spec:
         - name: TS_NAME
           value: "traffic-schedule"
         - name: DEBUG
-          value: "true"
+          value: "false"
         - name: PYTHONUNBUFFERED
           value: "1"
+        resources:
+          requests:
+            cpu: "1"
+            memory: "256Mi"
+          limits:
+            cpu: "2"
+            memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service

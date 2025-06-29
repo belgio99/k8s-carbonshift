@@ -122,8 +122,8 @@ func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	next := pollInterval
    if !status.ValidUntil.IsZero() {
        until := time.Until(status.ValidUntil.Time)
-       if until < 0 {
-           until = 0
+       if until <= 0 {
+           until = 1 * time.Second
        }
        if until < next { 
            next = until
