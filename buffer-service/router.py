@@ -107,10 +107,6 @@ async def _init_rabbit() -> None:
         durable=True,
     )
 
-    # Reply-queue “privata” del router
-    rabbit_state["reply_queue"] = await rabbit_state["channel"].declare_queue(
-        exclusive=True, auto_delete=True
-    )
 
     # Consumer fisso che demultiplexa via correlation_id
     async def _on_reply(msg: aio_pika.IncomingMessage) -> None:
@@ -120,7 +116,7 @@ async def _init_rabbit() -> None:
         if future and not future.done():
             future.set_result(msg)
 
-    await rabbit_state["reply_queue"].consume(_on_reply, no_ack=False)
+    await rabbit_state["channel"].consume(_on_reply, queue_name="amq.rabbitmq.reply-to", no_ack=True)
 
 
 async def get_rabbit_channel() -> aio_pika.Channel:
@@ -205,7 +201,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
             aio_pika.Message(
                 json.dumps(payload).encode(),
                 correlation_id=correlation_id,
-                reply_to=rabbit_state["reply_queue"].name,
+                reply_to="amq.rabbitmq.reply-to",
                 headers={
                     "q_type": q_type,
                     "flavour": flavour,
