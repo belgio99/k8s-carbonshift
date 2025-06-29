@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import uvloop  # type: ignore
 uvloop.install()
-l
+
 
 import asyncio
 import json
