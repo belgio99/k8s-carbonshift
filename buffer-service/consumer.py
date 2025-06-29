@@ -9,10 +9,12 @@ HTTP request to the target service and answers via AMQP (RPC style).
 # ──────────────────────────────────────────────────────────────
 # Faster event-loop (must be done BEFORE importing asyncio)
 # ──────────────────────────────────────────────────────────────
-import uvloop  # type: ignore
-uvloop.install()
 
 from __future__ import annotations
+
+import uvloop  # type: ignore
+uvloop.install()
+l
 
 import asyncio
 import json
