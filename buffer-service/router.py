@@ -241,8 +241,7 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
             ).inc()
             raise HTTPException(status_code=504, detail="Upstream timeout")
 
-        async with rabbit_msg.process():  # ack al termine
-            response_data = json.loads(rabbit_msg.body)
+        response_data = json.loads(rabbit_msg.body)
 
         status_code = int(response_data.get("status", 200))
         HTTP_REQUESTS.labels(
