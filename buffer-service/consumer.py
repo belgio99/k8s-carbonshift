@@ -272,8 +272,8 @@ async def main() -> None:
 
     async def _get_channel() -> aio_pika.RobustChannel:
         """Return a new channel from the pooled connection."""
-        conn = await connection_pool.acquire()
-        return await conn.channel()
+        async with connection_pool.acquire() as conn:
+            return await conn.channel()
 
     channel_pool: Pool[aio_pika.RobustChannel] = Pool(_get_channel, max_size=64)
 
