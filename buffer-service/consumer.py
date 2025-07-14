@@ -157,6 +157,7 @@ async def forward_and_reply(
             response_headers = {"content-type": "application/json"}
             response_body = json.dumps({"error": str(exc)}).encode()
             await message.nack(requeue=True)
+            debug(f"Error processing message: {exc}")
             return 500, time.perf_counter() - start_ts
 
         # Publish RPC reply using a pooled channel (avoids single-channel lock)
@@ -280,9 +281,10 @@ async def consume_buffer_queue(
 # Main bootstrap
 # ──────────────────────────────────────────────────────────────
 async def main() -> None:
+    print("Starting Carbonshift consumer...")
     # Prometheus endpoint
     start_http_server(METRICS_PORT)
-
+    print(f"Prometheus metrics available at /metrics, port {METRICS_PORT}")
     # TrafficSchedule manager (background task)
     schedule_mgr = TrafficScheduleManager(TS_NAME)
     asyncio.create_task(schedule_mgr.load_once())
