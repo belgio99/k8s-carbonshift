@@ -94,6 +94,12 @@ MAX_RETRIES          = 5
 BACKOFF_FIRST_DELAY  = 1.0
 BACKOFF_FACTOR       = 2
 RETRYABLE_STATUS     = {500, 502, 503, 504}
+RETRYABLE_EXC        = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+)
 
 # ──────────────────────────────────────────────────────────────
 # FastAPI – only /metrics
@@ -111,7 +117,7 @@ async def send_with_retry(http_client: httpx.AsyncClient, **req_kw):
             raise RuntimeError(f"status {r.status_code}")
         except (*RETRYABLE_EXC, RuntimeError) as exc:
             if attempt == MAX_RETRIES:
-                rais
+                raise
             await asyncio.sleep(delay)
             delay *= BACKOFF_FACTOR
 
