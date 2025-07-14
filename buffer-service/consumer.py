@@ -131,51 +131,49 @@ async def forward_and_reply(
     """
     start_ts = time.perf_counter()
 
-    async with message.process(requeue=False):  # auto-nack on error
-        try:
-            payload: Dict[str, Any] = json.loads(message.body)
+    try:
+        payload: Dict[str, Any] = json.loads(message.body)
+        debug(
+            f"Payload: method={payload.get('method')} path={payload.get('path')} headers={payload.get('headers')}"
+        )
+        response = await send_with_retry(
+            http_client,
+            method=payload["method"],
+            url=f"{TARGET_BASE_URL}{payload['path']}",
+            params=payload.get("query"),
+            headers={**payload.get("headers", {}), "x-carbonshift": flavour},
+            content=b64dec(payload["body"]),
+        )
+        status_code = response.status_code
+        response_headers = dict(response.headers)
+        response_body = response.content
 
-            debug(
-                f"Payload: method={payload.get('method')} path={payload.get('path')} headers={payload.get('headers')}"
-            )
+    except Exception as exc:  # network / decode failure
+        status_code = 500
+        response_headers = {"content-type": "application/json"}
+        response_body = json.dumps({"error": str(exc)}).encode()
 
-            response = await send_with_retry(
-                http_client,
-                method=payload["method"],
-                url=f"{TARGET_BASE_URL}{payload['path']}",
-                params=payload.get("query"),
-                headers={**payload.get("headers", {}), "x-carbonshift": flavour},
-                content=b64dec(payload["body"]),
-            )
+        await message.nack(requeue=True)
 
-            status_code = response.status_code
-            response_headers = dict(response.headers)
-            response_body = response.content
+        debug(f"Error processing message: {exc}")
+        return 500, time.perf_counter() - start_ts
 
-        except Exception as exc:  # network / decode failure
-            status_code = 500
-            response_headers = {"content-type": "application/json"}
-            response_body = json.dumps({"error": str(exc)}).encode()
-            await message.nack(requeue=True)
-            debug(f"Error processing message: {exc}")
-            return 500, time.perf_counter() - start_ts
-
-        # Publish RPC reply using a pooled channel (avoids single-channel lock)
-        async with channel_pool.acquire() as publish_ch:
-            await publish_ch.default_exchange.publish(
-                aio_pika.Message(
-                    json.dumps(
-                        {
-                            "status": status_code,
-                            "headers": response_headers,
-                            "body": b64enc(response_body),
-                        }
-                    ).encode(),
-                    correlation_id=message.correlation_id,
-                ),
-                routing_key=message.reply_to,
-            )
-        await message.ack()
+    # Publish RPC reply using a pooled channel (avoids single-channel lock)
+    async with channel_pool.acquire() as publish_ch:
+        await publish_ch.default_exchange.publish(
+            aio_pika.Message(
+                json.dumps(
+                    {
+                        "status": status_code,
+                        "headers": response_headers,
+                        "body": b64enc(response_body),
+                    }
+                ).encode(),
+                correlation_id=message.correlation_id,
+            ),
+            routing_key=message.reply_to,
+        )
+    await message.ack()
 
     elapsed = time.perf_counter() - start_ts
     return status_code, elapsed
