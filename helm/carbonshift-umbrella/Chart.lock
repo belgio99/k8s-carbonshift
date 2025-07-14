@@ -5,9 +5,6 @@ dependencies:
 - name: istiod
   repository: https://istio-release.storage.googleapis.com/charts
   version: 1.25.0
-- name: gateway
-  repository: https://istio-release.storage.googleapis.com/charts
-  version: 1.25.0
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 75.6.0
@@ -23,5 +20,5 @@ dependencies:
 - name: carbonshift-operator
   repository: file://../../operator/dist/chart
   version: 0.1.0
-digest: sha256:a740f3e5d4d926f8bc4a62c325fd01c7f49f7d700f37944935915e40e4244cb1
-generated: "2025-06-29T19:05:49.426951+02:00"
+digest: sha256:20db43c6503e9bba7f08561139a9ff19ef73b828bfe5d406544ab33256023b15
+generated: "2025-07-14T16:23:12.986656+02:00"

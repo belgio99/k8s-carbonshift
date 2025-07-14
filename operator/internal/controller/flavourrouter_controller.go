@@ -92,9 +92,6 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// 4. Create or update the Gateway, DestinationRule and VirtualServices
 
-	if err := r.ensureGateway(ctx, svc); err != nil {
-		return ctrl.Result{}, err
-	}
 	if err := r.ensureDR(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -103,10 +100,6 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	/* 5. Autoscaling a zero
-	   /*if err := r.handleScaling(ctx, svc.Namespace, weightsFlavour); err != nil {
-	       return ctrl.Result{}, err
-	   }*/
 
 	// 6. Re-queue in base a ValidUntil
 	if !trafficschedule.ValidUntil.IsZero() {
@@ -120,56 +113,56 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
-func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context, svc corev1.Service) error {
-
-	ctrl.LoggerFrom(ctx).Info("Ensuring Gateway for service", "service", svc.Name)
-	name := fmt.Sprintf("%s-entry-gw", svc.Name)
-
-	if len(svc.Spec.Ports) == 0 {
-		return fmt.Errorf("service %s/%s has no ports defined", svc.Namespace, svc.Name)
-	}
-	p := svc.Spec.Ports[0] // using the first port defined in the service
-	proto := "HTTP"
-	if p.Port == 443 || p.Name == "https" {
-		proto = "HTTPS"
-	}
-
-	host := fmt.Sprintf("%s.example.com", svc.Name)
-
-	gw := networkingkube.Gateway{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
-		Spec: networkingapi.Gateway{
-			Selector: map[string]string{"istio": "gateway"}, // use the default Istio ingress gateway
-			Servers: []*networkingapi.Server{{
-				Port: &networkingapi.Port{
-					Number:   uint32(p.Port),
-					Name:     p.Name,
-					Protocol: proto,
-				},
-				Hosts: []string{host},
-			}},
-		},
-	}
-
-	if err := ctrl.SetControllerReference(&svc, &gw, r.Scheme); err != nil {
-		return err
-	}
-
-	var cur networkingkube.Gateway
-	err := r.Get(ctx, client.ObjectKey{Namespace: svc.Namespace, Name: name}, &cur)
-	switch {
-	case apierrors.IsNotFound(err):
-		return r.Create(ctx, &gw)
-	case err != nil:
-		return err
-	case !reflect.DeepEqual(cur.Spec, gw.Spec):
-		cur.Spec = gw.Spec
-		ctrl.LoggerFrom(ctx).Info("Gateway updated", "name", name, "namespace", svc.Namespace)
-		return r.Update(ctx, &cur)
-	}
-	return nil
-}
-
+//func (r *FlavourRouterReconciler) ensureGateway(ctx context.Context, svc corev1.Service) error {
+//
+//	ctrl.LoggerFrom(ctx).Info("Ensuring Gateway for service", "service", svc.Name)
+//	name := fmt.Sprintf("%s-entry-gw", svc.Name)
+//
+//	if len(svc.Spec.Ports) == 0 {
+//		return fmt.Errorf("service %s/%s has no ports defined", svc.Namespace, svc.Name)
+//	}
+//	p := svc.Spec.Ports[0] // using the first port defined in the service
+//	proto := "HTTP"
+//	if p.Port == 443 || p.Name == "https" {
+//		proto = "HTTPS"
+//	}
+//
+//	host := fmt.Sprintf("%s.example.com", svc.Name)
+//
+//	gw := networkingkube.Gateway{
+//		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
+//		Spec: networkingapi.Gateway{
+//			Selector: map[string]string{"istio": "gateway"}, // use the default Istio ingress gateway
+//			Servers: []*networkingapi.Server{{
+//				Port: &networkingapi.Port{
+//					Number:   uint32(p.Port),
+//					Name:     p.Name,
+//					Protocol: proto,
+//				},
+//				Hosts: []string{host},
+//			}},
+//		},
+//	}
+//
+//	if err := ctrl.SetControllerReference(&svc, &gw, r.Scheme); err != nil {
+//		return err
+//	}
+//
+//	var cur networkingkube.Gateway
+//	err := r.Get(ctx, client.ObjectKey{Namespace: svc.Namespace, Name: name}, &cur)
+//	switch {
+//	case apierrors.IsNotFound(err):
+//		return r.Create(ctx, &gw)
+//	case err != nil:
+//		return err
+//	case !reflect.DeepEqual(cur.Spec, gw.Spec):
+//		cur.Spec = gw.Spec
+//		ctrl.LoggerFrom(ctx).Info("Gateway updated", "name", name, "namespace", svc.Namespace)
+//		return r.Update(ctx, &cur)
+//	}
+//	return nil
+//}
+//
 func (r *FlavourRouterReconciler) ensureDR(ctx context.Context, svc *corev1.Service) error {
 	ctrl.LoggerFrom(ctx).Info("Ensuring DestinationRule for service", "service", svc.Name)
 	name := fmt.Sprintf("%s-carbonshift-dr", svc.Name)
@@ -270,9 +263,9 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
     
 	ctrl.LoggerFrom(ctx).Info("Ensuring Flavour VirtualService for service", "service", svc.Name)
 
-	highW := int32(wFl["high-power"])
-	midW := int32(wFl["mid-power"])
-	lowW := int32(wFl["low-power"])
+	//highW := int32(wFl["high-power"])
+	//midW := int32(wFl["mid-power"])
+	//lowW := int32(wFl["low-power"])
 
 	matches := []struct{ val, subset string }{
 		{"high-power", "high-power"}, {"mid-power", "mid-power"}, {"low-power", "low-power"},
@@ -295,13 +288,13 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 	}
 
 	// "Normal" traffic routing to the flavours
-	httpRoutes = append(httpRoutes, &networkingapi.HTTPRoute{
-		Route: []*networkingapi.HTTPRouteDestination{
-			{Destination: &networkingapi.Destination{Host: host, Subset: "high-power"}, Weight: highW},
-			{Destination: &networkingapi.Destination{Host: host, Subset: "mid-power"}, Weight: midW},
-			{Destination: &networkingapi.Destination{Host: host, Subset: "low-power"}, Weight: lowW},
-		},
-	})
+	//httpRoutes = append(httpRoutes, &networkingapi.HTTPRoute{
+	//	Route: []*networkingapi.HTTPRouteDestination{
+	//		{Destination: &networkingapi.Destination{Host: host, Subset: "high-power"}, Weight: highW},
+	//		{Destination: &networkingapi.Destination{Host: host, Subset: "mid-power"}, Weight: midW},
+	//		{Destination: &networkingapi.Destination{Host: host, Subset: "low-power"}, Weight: lowW},
+	//	},
+	//})
 
 	vs := networkingkube.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},

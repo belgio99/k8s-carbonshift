@@ -71,10 +71,10 @@ spec:
           value: "1"
         resources:
           requests:
-            cpu: "1"
+            cpu: "200m"
             memory: "256Mi"
           limits:
-            cpu: "2"
+            cpu: "1"
             memory: "512Mi"
 ---
 apiVersion: v1
@@ -100,44 +100,6 @@ spec:
     port: 8001
     targetPort: 8001
   type: ClusterIP
----
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: buffer-service-router-carbonstat
-  namespace: carbonstat
-  labels:
-    release: carbonshift
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name:      buffer-service-router
-      app.kubernetes.io/instance:  carbonshift
-  endpoints:
-    - port: metrics
-      interval: 15s
-      path: /metrics
----
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: rabbitmq-service-monitor
-  namespace: carbonshift-system
-  labels:
-    release: carbonshift
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name:      rabbitmq
-      app.kubernetes.io/instance:  carbonshift
-  endpoints:
-    - port: metrics
-      interval: 15s
-      path: /metrics/detailed
-      params:
-        family:
-        - queue_coarse_metrics
-        - queue_consumer_count
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -200,10 +162,10 @@ spec:
           value: "1"
         resources:
           requests:
-            cpu: "1"
+            cpu: "200m"
             memory: "256Mi"
           limits:
-            cpu: "2"
+            cpu: "1"
             memory: "512Mi"
 ---
 apiVersion: v1
@@ -222,86 +184,190 @@ spec:
     app.kubernetes.io/name:        buffer-service-consumer
     app.kubernetes.io/instance:    carbonshift
   ports:
-  - name: http
-    port: 8000
-    targetPort: 8000
   - name: metrics
     port: 8001
     targetPort: 8001
   type: ClusterIP
 ---
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: buffer-service-consumer-carbonstat
-  namespace: carbonstat
-  labels:
-    release: carbonshift
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name:      buffer-service-consumer
-      app.kubernetes.io/instance:  carbonshift
-  endpoints:
-    - port: metrics
-      interval: 15s
-      path: /metrics
----
-apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
-metadata:
-  name: envoy-buffer-consumer
-  namespace: carbonshift-system
-  labels:
-    release: carbonshift
-spec:
-  namespaceSelector:
-    matchNames: ["carbonstat"]
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: buffer-service-consumer
-      app.kubernetes.io/instance: carbonshift
-  podMetricsEndpoints:
-    - port: http-envoy-prom
-      path: /stats/prometheus
-      interval: 15s
----
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: carbon-consumer-direct
+  name: buffer-service-consumer
   namespace: carbonstat
 spec:
   scaleTargetRef:
-    name: carbon-consumer
+    name: buffer-service-consumer-carbonstat
   pollingInterval: 5
   cooldownPeriod: 30
   minReplicaCount: 0
   maxReplicaCount: 15
   triggers:
   # --- direct.low-power ---
+  # Wake up the consumer when the queue length is above 1
   - type: rabbitmq
     authenticationRef:
-      name: rabbitmq-auth
-      kind: ClusterTriggerAuthentication   # se stai usando la CTA
+      name: carbonshift-rabbitmq-auth
+      kind: ClusterTriggerAuthentication
     metadata:
       queueName: carbonstat.carbonstat.direct.low-power
-      queueLength: "1"
+      mode: QueueLength
+      value: "1000000" # High value to prevent creating 1 pod per message
 
   # --- direct.mid-power ---
   - type: rabbitmq
     authenticationRef:
-      name: rabbitmq-auth
+      name: carbonshift-rabbitmq-auth
       kind: ClusterTriggerAuthentication
     metadata:
       queueName: carbonstat.carbonstat.direct.mid-power
-      queueLength: "1"
+      mode: QueueLength
+      value: "1000000"
 
   # --- direct.high-power ---
   - type: rabbitmq
     authenticationRef:
-      name: rabbitmq-auth
+      name: carbonshift-rabbitmq-auth
       kind: ClusterTriggerAuthentication
     metadata:
       queueName: carbonstat.carbonstat.direct.high-power
-      queueLength: "1"
+      mode: QueueLength
+      value: "1000000"
+
+  - type: cpu
+    metricType: Utilization
+    metadata:
+      value: "80"
+  # Cooldown
+  - type: prometheus
+    metadata:
+      serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
+      query: |
+        sum(increase(consumer_http_requests_created[60s]))
+      threshold: "1000000"
+      activationThreshold: "1"
+
+  - type: prometheus
+    metadata:
+      serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
+      query: |
+        sum(rabbitmq_queue_messages_ready{queue=~"^carbonstat\\.carbonstat\\.queue\\..+"})
+        *
+        max(schedule_consumption_enabled)
+      threshold: "1"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: carbonstat-low-power
+  namespace: carbonstat
+spec:
+  scaleTargetRef:
+    name: carbonstat-low-power
+  pollingInterval: 5
+  cooldownPeriod: 60
+  minReplicaCount: 0
+  maxReplicaCount: 15
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
+        query: |
+          sum(
+            rabbitmq_queue_messages_ready{
+              queue="carbonstat.carbonstat.queue.low-power"
+            }
+          ) * max(schedule_consumption_enabled)
+        threshold: "1000000"
+        activationThreshold: "1"
+
+    - type: rabbitmq
+      authenticationRef:
+        name: carbonshift-rabbitmq-auth
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueName: carbonstat.carbonstat.direct.low-power
+        mode: QueueLength
+        value: "1000000"
+        activationValue: "1"
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "80"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: carbonstat-mid-power
+  namespace: carbonstat
+spec:
+  scaleTargetRef:
+    name: carbonstat-mid-power
+  pollingInterval: 5
+  cooldownPeriod: 60
+  minReplicaCount: 0
+  maxReplicaCount: 15
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
+        query: |
+          sum(
+            rabbitmq_queue_messages_ready{
+              queue="carbonstat.carbonstat.queue.mid-power"
+            }
+          ) * max(schedule_consumption_enabled)
+        threshold: "1000000"
+        activationThreshold: "1"
+
+    - type: rabbitmq
+      authenticationRef:
+        name: carbonshift-rabbitmq-auth
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueName: carbonstat.carbonstat.direct.mid-power
+        mode: QueueLength
+        value: "1000000"
+        activationValue: "1"
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "80"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: carbonstat-high-power
+  namespace: carbonstat
+spec:
+  scaleTargetRef:
+    name: carbonstat-high-power
+  pollingInterval: 5
+  cooldownPeriod: 60
+  minReplicaCount: 0
+  maxReplicaCount: 15
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
+        query: |
+          sum(
+            rabbitmq_queue_messages_ready{
+              queue="carbonstat.carbonstat.queue.high-power"
+            }
+          ) * max(schedule_consumption_enabled)
+        threshold: "1000000"
+        activationThreshold: "1"
+
+    - type: rabbitmq
+      authenticationRef:
+        name: carbonshift-rabbitmq-auth
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueName: carbonstat.carbonstat.direct.high-power
+        mode: QueueLength
+        value: "1000000"
+        activationValue: "1"
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "80"

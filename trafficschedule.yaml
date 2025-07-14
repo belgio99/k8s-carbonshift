@@ -3,3 +3,34 @@ kind: TrafficSchedule
 metadata:
   name: traffic-schedule
 spec:
+  target:
+    autoscaling:
+      minReplicaCount: 0
+      maxReplicaCount: 15
+      cpuUtilization: 80
+  router:
+    autoscaling:
+      enabled:
+      minReplicaCount: 1
+      maxReplicaCount: 15
+      cpuUtilization: 80
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "512Mi"
+  consumer:
+    autoscaling:
+      enabled: true
+      minReplicaCount: 0
+      maxReplicaCount: 15
+      cpuUtilization: 80
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "512Mi"
