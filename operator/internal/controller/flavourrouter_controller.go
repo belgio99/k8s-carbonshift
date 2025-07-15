@@ -10,11 +10,11 @@ import (
 
 	//appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
@@ -109,7 +109,7 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensureBufferServiceDeployment(ctx, &svc, "router", tsSpec.Router.Resources); err != nil {
+	if err := r.ensureBufferServiceDeployment(ctx, &svc, "router", tsSpec.Router.Resources, tsSpec.Router.Debug); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -117,7 +117,7 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensureBufferServiceDeployment(ctx, &svc, "consumer", tsSpec.Consumer.Resources); err != nil {
+	if err := r.ensureBufferServiceDeployment(ctx, &svc, "consumer", tsSpec.Consumer.Resources, tsSpec.Consumer.Debug); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -528,7 +528,7 @@ func (r *FlavourRouterReconciler) ensureBufferServiceService(ctx context.Context
 	return nil
 }
 
-func (r *FlavourRouterReconciler) ensureBufferServiceDeployment(ctx context.Context, svc *corev1.Service, component string, resources corev1.ResourceRequirements) error {
+func (r *FlavourRouterReconciler) ensureBufferServiceDeployment(ctx context.Context, svc *corev1.Service, component string, resources corev1.ResourceRequirements, debug bool) error {
 	log := ctrl.LoggerFrom(ctx).WithName("[FlavourRouter]")
 	depName := fmt.Sprintf("buffer-service-%s-%s", component, svc.Name)
 	saName := fmt.Sprintf("%s-trafficschedule-viewer", svc.Name)
@@ -560,7 +560,7 @@ func (r *FlavourRouterReconciler) ensureBufferServiceDeployment(ctx context.Cont
 		{Name: "TARGET_SVC_NAME", Value: svc.Name},
 		{Name: "TARGET_SVC_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: "TS_NAME", Value: "traffic-schedule"},
-		{Name: "DEBUG", Value: "true"},
+		{Name: "DEBUG", Value: fmt.Sprintf("%t", debug)},
 		{Name: "PYTHONUNBUFFERED", Value: "1"},
 	}
 
@@ -616,26 +616,26 @@ func (r *FlavourRouterReconciler) ensureBufferServiceDeployment(ctx context.Cont
 	}
 
 	desired := dep.Spec
-   desired.Replicas = nil
+	desired.Replicas = nil
 
-   current := currentDep.Spec
-   current.Replicas = nil
+	current := currentDep.Spec
+	current.Replicas = nil
 
-   if !equality.Semantic.DeepEqual(current, desired) {
-      log.Info("Updating Deployment", "Component", component, "Deployment", dep.Name)
+	if !equality.Semantic.DeepEqual(current, desired) {
+		log.Info("Updating Deployment", "Component", component, "Deployment", dep.Name)
 
-      return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-         var latest appsv1.Deployment
-         if err := r.Get(ctx, client.ObjectKey{Name: depName, Namespace: svc.Namespace}, &latest); err != nil {
-            return err
-         }
-         // manteniamo le Replicas attuali (gestite dall’HPA/KEDA)
-         dep.Spec.Replicas = latest.Spec.Replicas
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			var latest appsv1.Deployment
+			if err := r.Get(ctx, client.ObjectKey{Name: depName, Namespace: svc.Namespace}, &latest); err != nil {
+				return err
+			}
+			// manteniamo le Replicas attuali (gestite dall’HPA/KEDA)
+			dep.Spec.Replicas = latest.Spec.Replicas
 
-         latest.Spec = dep.Spec
-         return r.Update(ctx, &latest)
-      })
-   }
+			latest.Spec = dep.Spec
+			return r.Update(ctx, &latest)
+		})
+	}
 
 	return nil
 }

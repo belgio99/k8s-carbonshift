@@ -40,6 +40,8 @@ type ComponentConfig struct {
 	Autoscaling AutoscalingConfig `json:"autoscaling,omitempty"`
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	// +optional
+	Debug bool `json:"debug,omitempty"`
 }
 
 // TargetConfig defines the configuration for the target deployments.
