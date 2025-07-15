@@ -57,7 +57,7 @@ const pollInterval = 1 * time.Minute
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *TrafficScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName("TrafficSchedule")
+	log := ctrl.LoggerFrom(ctx).WithName("[TrafficSchedule]")
 	log.Info("Reconciling TrafficSchedule", "name", req.Name)
 
 	var existing schedulingv1alpha1.TrafficSchedule

@@ -72,11 +72,9 @@ SCHEDULE_TTL = Gauge(
 # RabbitMQ state  (connection reused)
 # ────────────────────────────────────
 rabbit_state: dict[str, Any] = {
-    "connection": None,
     "channel": None,
-    "exchange": None,  # headers-exchange
-    "reply_queue": None,  # una sola reply-queue
-    "pending": {},  # correlation_id → Future
+    "connection": None,
+    "reply_queue": None,  # a single reply-queue
 }
 
 init_lock = asyncio.Lock()

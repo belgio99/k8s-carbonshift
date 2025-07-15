@@ -35,7 +35,7 @@ import (
 	schedulingv1alpha1 "github.com/belgio99/k8s-carbonshift/operator/api/v1alpha1"
 )
 
-/* ─────────────────────────────────────────  Costanti  ───────────────────────────────────────── */
+/* ─────────────────────────────────────────  Constants  ───────────────────────────────────────── */
 const (
 	carbonLabel            = "carbonshift"                   // high|mid|low
 	enableLabel            = "carbonshift/enabled"           // opt-in
@@ -45,7 +45,7 @@ const (
 
 var (
 	flavours       = []string{"high-power", "mid-power", "low-power"}
-	queueSvcSuffix = "-queue" // nome Service della coda <svc>-queue
+	queueSvcSuffix = "-queue" // queue Service name <svc>-queue
 )
 
 /* ─────────────────────────────────────── Reconciler  ────────────────────────────────────────── */
@@ -77,7 +77,8 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if svc.Labels[enableLabel] != "true" {
-		return ctrl.Result{}, nil
+		log.Info("Service no longer has Carbonshift enable label, cleaning up resources")
+		return ctrl.Result{}, r.cleanupResources(ctx, &svc)
 	}
 
 	// 2. Get the TrafficSchedule CR from the cluster
@@ -86,19 +87,11 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 	if len(tsList.Items) == 0 {
-		log.Info("No TrafficSchedule – requeue") //if no TrafficSchedule is found, requeue
+		log.Info("No TrafficSchedule – requeue") // if no TrafficSchedule is found, requeue
 		return ctrl.Result{RequeueAfter: defaultRequeue}, nil
 	}
 	tsSpec := tsList.Items[0].Spec
 	trafficschedule := tsList.Items[0].Status
-
-	// 3. Get the weights for flavours and direct/queue
-	weightsFlavour := map[string]int{"high-power": 0, "mid-power": 0, "low-power": 0}
-	for _, fr := range trafficschedule.FlavourRules {
-		weightsFlavour[fr.FlavourName] = fr.Weight
-		log.Info("Flavour weights", "flavour", fr.FlavourName, "weight", fr.Weight)
-	}
-	directW := trafficschedule.DirectWeight
 
 	// 4. Create or update all necessary resources
 	if err := r.ensureServiceAccount(ctx, &svc); err != nil {
@@ -139,11 +132,11 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensureFlavourVS(ctx, &svc, directW, weightsFlavour); err != nil {
+	if err := r.ensureVS(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// 5. Re-queue in base a ValidUntil
+	// 5. Re-queue based on ValidUntil
 	if !trafficschedule.ValidUntil.IsZero() {
 		delay := time.Until(trafficschedule.ValidUntil.Time)
 		if delay < 0 {
@@ -191,75 +184,13 @@ func (r *FlavourRouterReconciler) ensureDR(ctx context.Context, svc *corev1.Serv
 	return nil
 }
 
-func (r *FlavourRouterReconciler) ensureEntryVS(ctx context.Context, svc *corev1.Service, directW, queueW int) error {
-	log := ctrl.LoggerFrom(ctx).WithName("[FlavourRouter]")
-	log.Info("Ensuring Entry VirtualService for service", "service", svc.Name)
-	name := fmt.Sprintf("%s-entry-vs", svc.Name)
-	host := fmt.Sprintf("%s-flavour-vs.%s.svc.cluster.local", svc.Name, svc.Namespace)
-	sourceHost := fmt.Sprintf("%s.example.com", svc.Namespace)
-	queueHost := fmt.Sprintf("%s%s.%s.svc.cluster.local", svc.Name, queueSvcSuffix, svc.Namespace)
-
-	vs := networkingkube.VirtualService{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
-		Spec: networkingapi.VirtualService{
-			Hosts: []string{sourceHost},
-			Http: []*networkingapi.HTTPRoute{
-				{
-					Match: []*networkingapi.HTTPMatchRequest{{
-						Headers: map[string]*networkingapi.StringMatch{
-							"X-Urgent": {MatchType: &networkingapi.StringMatch_Exact{Exact: "true"}},
-						},
-					}},
-					Route: []*networkingapi.HTTPRouteDestination{{
-						Destination: &networkingapi.Destination{Host: host},
-						Weight:      100,
-					}},
-				},
-				{
-					Route: []*networkingapi.HTTPRouteDestination{
-						{
-							Destination: &networkingapi.Destination{Host: host}, // Direct traffic to the service
-							Weight:      int32(directW),
-						},
-						{
-							Destination: &networkingapi.Destination{Host: queueHost}, // Traffic sent to the queue service
-							Weight:      int32(queueW),
-						},
-					},
-				},
-			},
-		},
-	}
-	if err := ctrl.SetControllerReference(svc, &vs, r.Scheme); err != nil {
-		return err
-	}
-
-	var cur networkingkube.VirtualService
-	err := r.Get(ctx, client.ObjectKey{Namespace: svc.Namespace, Name: name}, &cur)
-	switch {
-	case apierrors.IsNotFound(err):
-		return r.Create(ctx, &vs)
-	case err != nil:
-		return err
-	case !equality.Semantic.DeepEqual(cur.Spec, vs.Spec):
-		cur.Spec = vs.Spec
-		log.Info("Entry VirtualService was updated", "name", name, "namespace", svc.Namespace)
-		return r.Update(ctx, &cur) // Update the Entry VirtualService if it differs
-	}
-	return nil
-}
-
-func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *corev1.Service, directW int, wFl map[string]int) error {
+func (r *FlavourRouterReconciler) ensureVS(ctx context.Context, svc *corev1.Service) error {
 	log := ctrl.LoggerFrom(ctx).WithName("[FlavourRouter]")
 	name := fmt.Sprintf("%s-carbonshift-vs", svc.Name)
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 	sourceHost := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 
 	log.Info("Ensuring Flavour VirtualService for service", "service", svc.Name)
-
-	//highW := int32(wFl["high-power"])
-	//midW := int32(wFl["mid-power"])
-	//lowW := int32(wFl["low-power"])
 
 	matches := []struct{ val, subset string }{
 		{"high-power", "high-power"}, {"mid-power", "mid-power"}, {"low-power", "low-power"},
@@ -280,15 +211,6 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 			}},
 		})
 	}
-
-	// "Normal" traffic routing to the flavours
-	//httpRoutes = append(httpRoutes, &networkingapi.HTTPRoute{
-	//	Route: []*networkingapi.HTTPRouteDestination{
-	//		{Destination: &networkingapi.Destination{Host: host, Subset: "high-power"}, Weight: highW},
-	//		{Destination: &networkingapi.Destination{Host: host, Subset: "mid-power"}, Weight: midW},
-	//		{Destination: &networkingapi.Destination{Host: host, Subset: "low-power"}, Weight: lowW},
-	//	},
-	//})
 
 	vs := networkingkube.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: svc.Namespace},
@@ -317,45 +239,6 @@ func (r *FlavourRouterReconciler) ensureFlavourVS(ctx context.Context, svc *core
 	return nil
 }
 
-/*
-func (r *FlavourRouterReconciler) handleScaling(ctx context.Context, ns string, weights map[string]int) error {
-    for _, fl := range flavours {
-        var depList appsv1.DeploymentList
-        if err := r.List(ctx, &depList,
-            client.InNamespace(ns),
-            client.MatchingLabels{carbonLabel: fl}); err != nil {
-            return err
-        }
-        for i := range depList.Items {
-            dep := &depList.Items[i]
-            wantZero := weights[fl] == 0
-
-            replicas := int32(1)
-            if dep.Spec.Replicas != nil {
-                replicas = *dep.Spec.Replicas
-            }
-
-            switch {
-            case wantZero && replicas != 0:
-                if dep.Annotations == nil { dep.Annotations = map[string]string{} }
-                dep.Annotations[origReplicasAnnotation] = strconv.Itoa(int(replicas))
-                z := int32(0); dep.Spec.Replicas = &z
-                if err := r.Update(ctx, dep); err != nil { return err }
-
-            case !wantZero && replicas == 0:
-                restore := int32(1)
-                if s, ok := dep.Annotations[origReplicasAnnotation]; ok {
-                    if n, err := strconv.Atoi(s); err == nil { restore = int32(n) }
-                }
-                dep.Spec.Replicas = &restore
-                if err := r.Update(ctx, dep); err != nil { return err }
-            }
-        }
-    }
-    return nil
-}
-*/
-
 func (r *FlavourRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	svcPred := predicate.Funcs{
@@ -363,9 +246,11 @@ func (r *FlavourRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return e.Object.GetLabels()[enableLabel] == "true"
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.ObjectNew.GetLabels()[enableLabel] == "true"
+			oldHasLabel := e.ObjectOld.GetLabels()[enableLabel] == "true"
+			newHasLabel := e.ObjectNew.GetLabels()[enableLabel] == "true"
+			return oldHasLabel || newHasLabel
 		},
-		DeleteFunc: func(event.DeleteEvent) bool { return false },
+		DeleteFunc: func(e event.DeleteEvent) bool { return e.Object.GetLabels()[enableLabel] == "true" },
 	}
 
 	mapTS := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
@@ -393,6 +278,70 @@ func (r *FlavourRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&networkingkube.VirtualService{}).
 		Watches(&schedulingv1alpha1.TrafficSchedule{}, mapTS).
 		Complete(r)
+}
+
+func (r *FlavourRouterReconciler) cleanupResources(ctx context.Context, svc *corev1.Service) error {
+	log := ctrl.LoggerFrom(ctx).WithName("[FlavourRouter][Cleanup]").WithValues("service", svc.Name)
+	log.Info("Starting resource cleanup")
+
+	// Delete VirtualService
+	vsName := fmt.Sprintf("%s-carbonshift-vs", svc.Name)
+	vs := &networkingkube.VirtualService{ObjectMeta: metav1.ObjectMeta{Name: vsName, Namespace: svc.Namespace}}
+	if err := r.Delete(ctx, vs, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Failed to delete VirtualService")
+	}
+
+	// Delete DestinationRule
+	drName := fmt.Sprintf("%s-carbonshift-dr", svc.Name)
+	dr := &networkingkube.DestinationRule{ObjectMeta: metav1.ObjectMeta{Name: drName, Namespace: svc.Namespace}}
+	if err := r.Delete(ctx, dr, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Failed to delete DestinationRule")
+	}
+
+	// Delete ScaledObjects
+	for _, flavour := range flavours {
+		soName := fmt.Sprintf("%s-%s", svc.Name, flavour)
+		so := &kedav1alpha1.ScaledObject{ObjectMeta: metav1.ObjectMeta{Name: soName, Namespace: svc.Namespace}}
+		if err := r.Delete(ctx, so, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+			log.Error(err, "Failed to delete flavour ScaledObject", "ScaledObject", soName)
+		}
+	}
+	consumerSoName := fmt.Sprintf("buffer-service-consumer-%s", svc.Name)
+	consumerSo := &kedav1alpha1.ScaledObject{ObjectMeta: metav1.ObjectMeta{Name: consumerSoName, Namespace: svc.Namespace}}
+	if err := r.Delete(ctx, consumerSo, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Failed to delete consumer ScaledObject", "ScaledObject", consumerSoName)
+	}
+
+	// Delete Deployments and Services for buffer-service
+	for _, component := range []string{"router", "consumer"} {
+		depName := fmt.Sprintf("buffer-service-%s-%s", component, svc.Name)
+		dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: depName, Namespace: svc.Namespace}}
+		if err := r.Delete(ctx, dep, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+			log.Error(err, "Failed to delete Deployment", "Deployment", depName)
+		}
+
+		serviceName := fmt.Sprintf("buffer-service-%s-%s", component, svc.Name)
+		bufferSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: serviceName, Namespace: svc.Namespace}}
+		if err := r.Delete(ctx, bufferSvc, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+			log.Error(err, "Failed to delete Service", "Service", serviceName)
+		}
+	}
+
+	// Delete ServiceAccount and ClusterRoleBinding
+	saName := fmt.Sprintf("%s-trafficschedule-viewer", svc.Name)
+	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: saName, Namespace: svc.Namespace}}
+	if err := r.Delete(ctx, sa, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Failed to delete ServiceAccount")
+	}
+
+	rbName := fmt.Sprintf("%s-trafficschedule-viewer-binding", svc.Name)
+	rb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: rbName}}
+	if err := r.Delete(ctx, rb, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Failed to delete ClusterRoleBinding")
+	}
+
+	log.Info("Finished resource cleanup")
+	return nil
 }
 
 func (r *FlavourRouterReconciler) ensureServiceAccount(ctx context.Context, svc *corev1.Service) error {
