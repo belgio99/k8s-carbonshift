@@ -544,9 +544,19 @@ func (r *FlavourRouterReconciler) ensureBufferServiceDeployment(ctx context.Cont
 
 	var annotations map[string]string
 	var extraEnv []corev1.EnvVar
+	podLabels := labels
 
 	if component == "consumer" {
 		annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+		podLabels = map[string]string{
+			"app.kubernetes.io/name":       fmt.Sprintf("buffer-service-%s", component),
+			"app.kubernetes.io/instance":   "carbonshift",
+			"app.kubernetes.io/component":  component,
+			"app.kubernetes.io/part-of":    "carbonshift",
+			"carbonshift/parent-service":   svc.Name,
+			"app.kubernetes.io/managed-by": "carbonshift-operator",
+			"istio.io/rev":                 "default",
+		}
 		extraEnv = []corev1.EnvVar{
 			{Name: "TARGET_SVC_SCHEME", Value: "http"},
 			{Name: "TARGET_SVC_PORT", Value: "80"},
@@ -582,7 +592,7 @@ func (r *FlavourRouterReconciler) ensureBufferServiceDeployment(ctx context.Cont
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
+					Labels:      podLabels,
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
