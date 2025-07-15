@@ -286,6 +286,8 @@ async def consume_buffer_queue(
 # ──────────────────────────────────────────────────────────────
 async def main() -> None:
     print("Starting Carbonshift consumer...")
+    if os.getenv("DEBUG", "false").lower() != "true":
+        logging.getLogger("httpx").setLevel(logging.WARNING)
     # Prometheus endpoint
     start_http_server(METRICS_PORT)
     print(f"Prometheus metrics available at /metrics, port {METRICS_PORT}")

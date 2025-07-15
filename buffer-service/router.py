@@ -281,8 +281,9 @@ async def main() -> None:
     loop.create_task(schedule_mgr.expiry_guard())
 
     app = create_app(schedule_mgr)
+    log_level = "info" if os.getenv("DEBUG", "false").lower() == "true" else "warning"
     server = uvicorn.Server(
-        uvicorn.Config(app, host="0.0.0.0", port=8000, lifespan="off")
+        uvicorn.Config(app, host="0.0.0.0", port=8000, lifespan="off", log_level=log_level)
     )
     loop.create_task(server.serve())
 
