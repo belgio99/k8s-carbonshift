@@ -198,7 +198,7 @@ spec:
   scaleTargetRef:
     name: buffer-service-consumer-carbonstat
   pollingInterval: 5
-  cooldownPeriod: 30
+  cooldownPeriod: 60
   minReplicaCount: 0
   maxReplicaCount: 15
   triggers:
@@ -273,9 +273,11 @@ spec:
         serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
         query: |
           sum(
+            max_over_time(
             rabbitmq_queue_messages_ready{
               queue="carbonstat.carbonstat.queue.low-power"
             }
+          [30s])
           ) * max(schedule_consumption_enabled)
         threshold: "1000000"
         activationThreshold: "1"
@@ -288,7 +290,7 @@ spec:
         queueName: carbonstat.carbonstat.direct.low-power
         mode: QueueLength
         value: "1000000"
-        activationValue: "1"
+
     - type: cpu
       metricType: Utilization
       metadata:
@@ -312,9 +314,11 @@ spec:
         serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
         query: |
           sum(
+            max_over_time(
             rabbitmq_queue_messages_ready{
               queue="carbonstat.carbonstat.queue.mid-power"
             }
+          [30s])
           ) * max(schedule_consumption_enabled)
         threshold: "1000000"
         activationThreshold: "1"
@@ -327,7 +331,7 @@ spec:
         queueName: carbonstat.carbonstat.direct.mid-power
         mode: QueueLength
         value: "1000000"
-        activationValue: "1"
+
     - type: cpu
       metricType: Utilization
       metadata:
@@ -351,9 +355,11 @@ spec:
         serverAddress: http://carbonshift-kube-prometheu-prometheus.carbonshift-system.svc:9090
         query: |
           sum(
+            max_over_time(
             rabbitmq_queue_messages_ready{
               queue="carbonstat.carbonstat.queue.high-power"
             }
+          [30s])
           ) * max(schedule_consumption_enabled)
         threshold: "1000000"
         activationThreshold: "1"
@@ -366,7 +372,7 @@ spec:
         queueName: carbonstat.carbonstat.direct.high-power
         mode: QueueLength
         value: "1000000"
-        activationValue: "1"
+
     - type: cpu
       metricType: Utilization
       metadata:

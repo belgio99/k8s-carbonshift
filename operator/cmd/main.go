@@ -39,7 +39,9 @@ import (
 
 	schedulingv1alpha1 "github.com/belgio99/k8s-carbonshift/operator/api/v1alpha1"
 	"github.com/belgio99/k8s-carbonshift/operator/internal/controller"
+
 	// +kubebuilder:scaffold:imports
+	kedav1alpha1 "github.com/kedacore/keda/v2/apis/keda/v1alpha1"
 	istionet "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
@@ -52,6 +54,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(istionet.AddToScheme(scheme))
 	utilruntime.Must(schedulingv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(kedav1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

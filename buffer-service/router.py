@@ -186,6 +186,9 @@ def create_app(schedule_manager: TrafficScheduleManager) -> FastAPI:
         deadline_sec = flavour_deadlines.get(flavour, 60)
         expiration_ms = int(deadline_sec * 1000)
 
+        if not forced_flavour:
+            headers["x-carbonshift"] = flavour
+
         # ─── build payload ───
         payload = {
             "method": request.method,

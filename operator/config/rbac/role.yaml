@@ -7,8 +7,10 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - serviceaccounts
   - services
   verbs:
+  - create
   - get
   - list
   - patch
@@ -19,6 +21,19 @@ rules:
   resources:
   - deployments
   verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - keda.sh
+  resources:
+  - scaledobjects
+  verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -28,11 +43,21 @@ rules:
   - networking.istio.io
   resources:
   - destinationrules
-  - gateways
   - virtualservices
   verbs:
   - create
   - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  verbs:
+  - create
   - get
   - list
   - patch
