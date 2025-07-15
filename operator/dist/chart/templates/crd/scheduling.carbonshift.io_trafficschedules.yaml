@@ -66,6 +66,8 @@ spec:
                         format: int32
                         type: integer
                     type: object
+                  debug:
+                    type: boolean
                   resources:
                     description: ResourceRequirements describes the compute resource
                       requirements.
@@ -148,6 +150,8 @@ spec:
                         format: int32
                         type: integer
                     type: object
+                  debug:
+                    type: boolean
                   resources:
                     description: ResourceRequirements describes the compute resource
                       requirements.

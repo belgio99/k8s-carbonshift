@@ -57,12 +57,11 @@ type FlavourRouterReconciler struct {
 
 /* -------------------------- RBAC -------------------------- */
 
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=core,resources=services;serviceaccounts,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=scheduling.carbonshift.io,resources=trafficschedules,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices;destinationrules,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=keda.sh,resources=scaledobjects,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch
 
 /* -------------------------- Reconcile -------------------------- */
@@ -115,6 +114,10 @@ func (r *FlavourRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if err := r.ensureBufferServiceService(ctx, &svc, "consumer"); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.ensureRouterScaledObject(ctx, &svc, tsSpec.Router.Autoscaling); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -310,6 +313,12 @@ func (r *FlavourRouterReconciler) cleanupResources(ctx context.Context, svc *cor
 	consumerSo := &kedav1alpha1.ScaledObject{ObjectMeta: metav1.ObjectMeta{Name: consumerSoName, Namespace: svc.Namespace}}
 	if err := r.Delete(ctx, consumerSo, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
 		log.Error(err, "Failed to delete consumer ScaledObject", "ScaledObject", consumerSoName)
+	}
+
+	routerSoName := fmt.Sprintf("buffer-service-router-%s", svc.Name)
+	routerSo := &kedav1alpha1.ScaledObject{ObjectMeta: metav1.ObjectMeta{Name: routerSoName, Namespace: svc.Namespace}}
+	if err := r.Delete(ctx, routerSo, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Failed to delete router ScaledObject", "ScaledObject", routerSoName)
 	}
 
 	// Delete Deployments and Services for buffer-service
@@ -594,6 +603,57 @@ func (r *FlavourRouterReconciler) ensureBufferServiceDeployment(ctx context.Cont
 			latest.Spec = dep.Spec
 			return r.Update(ctx, &latest)
 		})
+	}
+
+	return nil
+}
+
+func (r *FlavourRouterReconciler) ensureRouterScaledObject(ctx context.Context, svc *corev1.Service, autoscaling schedulingv1alpha1.AutoscalingConfig) error {
+	log := ctrl.LoggerFrom(ctx).WithName("[FlavourRouter]")
+	soName := fmt.Sprintf("buffer-service-router-%s", svc.Name)
+	targetName := fmt.Sprintf("buffer-service-router-%s", svc.Name)
+
+	so := &kedav1alpha1.ScaledObject{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      soName,
+			Namespace: svc.Namespace,
+		},
+		Spec: kedav1alpha1.ScaledObjectSpec{
+			ScaleTargetRef:  &kedav1alpha1.ScaleTarget{Name: targetName},
+			PollingInterval: ptr.To[int32](5),
+			CooldownPeriod:  autoscaling.CooldownPeriod,
+			MinReplicaCount: autoscaling.MinReplicaCount,
+			MaxReplicaCount: autoscaling.MaxReplicaCount,
+			Triggers: []kedav1alpha1.ScaleTriggers{
+				{
+					Type: "cpu",
+					Metadata: map[string]string{
+						"type":  "Utilization",
+						"value": fmt.Sprintf("%d", *autoscaling.CPUUtilization),
+					},
+				},
+			},
+		},
+	}
+
+	if err := ctrl.SetControllerReference(svc, so, r.Scheme); err != nil {
+		return err
+	}
+
+	var currentSO kedav1alpha1.ScaledObject
+	err := r.Get(ctx, client.ObjectKey{Name: soName, Namespace: svc.Namespace}, &currentSO)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("Creating Router ScaledObject", "ScaledObject", so.Name)
+			return r.Create(ctx, so)
+		}
+		return err
+	}
+
+	if !equality.Semantic.DeepEqual(currentSO.Spec, so.Spec) {
+		currentSO.Spec = so.Spec
+		log.Info("Updating Router ScaledObject", "ScaledObject", so.Name)
+		return r.Update(ctx, &currentSO)
 	}
 
 	return nil
