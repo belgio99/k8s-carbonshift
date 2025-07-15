@@ -12,7 +12,6 @@ spec:
   selector:
     matchLabels:
       {{- include "carbonstat.selectorLabels" $ | nindent 6 }}
-      instance: {{ .name }}
   template:
     metadata:
       {{- with $.Values.podAnnotations }}
@@ -21,7 +20,6 @@ spec:
       {{- end }}
       labels:
         {{- include "carbonstat.labels" $ | nindent 8 }}
-        instance: {{ .name }}
         carbonshift: {{ .flavour | quote }}
         {{- with $.Values.podLabels }}
         {{- toYaml . | nindent 8 }}

@@ -1,0 +1,200 @@
+---
+# Source: carbonstat/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: carbonstat
+  labels:
+    helm.sh/chart: carbonstat-0.1.0
+    app.kubernetes.io/name: carbonstat
+    app.kubernetes.io/instance: carbonstat
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+    carbonshift/enabled: "true"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: carbonstat
+    app.kubernetes.io/instance: carbonstat
+---
+# Source: carbonstat/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbonstat-high-power
+  labels:
+    helm.sh/chart: carbonstat-0.1.0
+    app.kubernetes.io/name: carbonstat
+    app.kubernetes.io/instance: carbonstat
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: carbonstat
+      app.kubernetes.io/instance: carbonstat
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: carbonstat-0.1.0
+        app.kubernetes.io/name: carbonstat
+        app.kubernetes.io/instance: carbonstat
+        app.kubernetes.io/version: "1.16.0"
+        app.kubernetes.io/managed-by: Helm
+        carbonshift: "high"
+    spec:
+      serviceAccountName: default
+      securityContext:
+        {}
+      containers:
+        - name: carbonstat
+          securityContext:
+            {}
+          image: "ghcr.io/belgio99/k8s-carbonshift/carbonstat:latest"
+          imagePullPolicy: Always
+          env:
+            - name: FLAVOUR
+              value: "high"
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+---
+# Source: carbonstat/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbonstat-mid-power
+  labels:
+    helm.sh/chart: carbonstat-0.1.0
+    app.kubernetes.io/name: carbonstat
+    app.kubernetes.io/instance: carbonstat
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: carbonstat
+      app.kubernetes.io/instance: carbonstat
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: carbonstat-0.1.0
+        app.kubernetes.io/name: carbonstat
+        app.kubernetes.io/instance: carbonstat
+        app.kubernetes.io/version: "1.16.0"
+        app.kubernetes.io/managed-by: Helm
+        carbonshift: "mid"
+    spec:
+      serviceAccountName: default
+      securityContext:
+        {}
+      containers:
+        - name: carbonstat
+          securityContext:
+            {}
+          image: "ghcr.io/belgio99/k8s-carbonshift/carbonstat:latest"
+          imagePullPolicy: Always
+          env:
+            - name: FLAVOUR
+              value: "mid"
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+---
+# Source: carbonstat/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbonstat-low-power
+  labels:
+    helm.sh/chart: carbonstat-0.1.0
+    app.kubernetes.io/name: carbonstat
+    app.kubernetes.io/instance: carbonstat
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: carbonstat
+      app.kubernetes.io/instance: carbonstat
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: carbonstat-0.1.0
+        app.kubernetes.io/name: carbonstat
+        app.kubernetes.io/instance: carbonstat
+        app.kubernetes.io/version: "1.16.0"
+        app.kubernetes.io/managed-by: Helm
+        carbonshift: "low"
+    spec:
+      serviceAccountName: default
+      securityContext:
+        {}
+      containers:
+        - name: carbonstat
+          securityContext:
+            {}
+          image: "ghcr.io/belgio99/k8s-carbonshift/carbonstat:latest"
+          imagePullPolicy: Always
+          env:
+            - name: FLAVOUR
+              value: "low"
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi

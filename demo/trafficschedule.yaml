@@ -10,7 +10,7 @@ spec:
       cooldownPeriod: 60
       cpuUtilization: 80
   router:
-    debug: true
+    debug: true #optional
     autoscaling:
       minReplicaCount: 1
       maxReplicaCount: 15
@@ -23,7 +23,7 @@ spec:
         cpu: "1"
         memory: "512Mi"
   consumer:
-    debug: true
+    debug: true #optional
     autoscaling:
       minReplicaCount: 0
       maxReplicaCount: 15
