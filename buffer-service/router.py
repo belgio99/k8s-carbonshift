@@ -75,6 +75,7 @@ rabbit_state: dict[str, Any] = {
     "channel": None,
     "connection": None,
     "reply_queue": None,  # a single reply-queue
+    "pending": {},
 }
 
 init_lock = asyncio.Lock()
